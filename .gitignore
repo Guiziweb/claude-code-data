@@ -1,0 +1,45 @@
+# Working docs (non-publiés)
+PLAN.md
+DECISIONS.md
+
+# Node / Bun
+node_modules/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Bun
+bun.lockb
+.bun/
+
+# Build / dist
+dist/
+build/
+*.tsbuildinfo
+
+# Tests
+coverage/
+.nyc_output/
+
+# Env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+*.pid
+*.seed
+*.tgz

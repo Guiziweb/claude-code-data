@@ -1,0 +1,15 @@
+[test]
+# Coverage thresholds enforced when `bun test --coverage` runs (CI).
+# Hitting 100 % keeps the repo's "every line tested" invariant.
+coverageThreshold = 1.0
+
+# Test files themselves shouldn't count against coverage.
+coverageSkipTestFiles = true
+
+# Files excluded from coverage entirely.
+# - scripts/   tooling, not production code.
+# - src/index.ts  trivial entrypoint that just calls start().
+coveragePathIgnorePatterns = [
+  "scripts/**",
+  "src/index.ts",
+]
