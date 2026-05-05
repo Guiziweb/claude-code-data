@@ -116,7 +116,7 @@ const PersistedWorktreeSessionSchema = v.looseObject({
 	worktreeBranch: v.optional(v.string()),
 	originalBranch: v.optional(v.string()),
 	originalHeadCommit: v.optional(v.string()),
-	sessionId: v.string(),
+	sessionId: Uuid,
 	tmuxSessionName: v.optional(v.string()),
 	hookBased: v.optional(v.boolean()),
 });
