@@ -10,6 +10,7 @@ import {
 	LastPromptMessageSchema,
 	PRLinkMessageSchema,
 	safeParseEntry,
+	safeParseEntryFromLine,
 	TranscriptMessageAssistantSchema,
 	TranscriptMessageUserSchema,
 	WorktreeStateEntrySchema,
@@ -112,30 +113,44 @@ describe('EntryV01Schema (union)', () => {
 });
 
 describe('safeParseEntry()', () => {
-	test('returns parsed entry for a valid V0.1 line', () => {
-		const line = loadRaw('custom-title.json');
-		const result = safeParseEntry(line);
+	test('returns parsed entry for a valid V0.1 object', () => {
+		const data = loadJson('custom-title.json');
+		const result = safeParseEntry(data);
 		expect(result).not.toBeNull();
 		expect(result?.type).toBe('custom-title');
 	});
 
 	test('returns null for unknown variant (hors-V0.1)', () => {
-		const line = loadRaw('unknown-variant.json');
-		const result = safeParseEntry(line);
-		expect(result).toBeNull();
+		const data = loadJson('unknown-variant.json');
+		expect(safeParseEntry(data)).toBeNull();
+	});
+
+	test('returns null for null', () => {
+		expect(safeParseEntry(null)).toBeNull();
+	});
+
+	test('returns null for non-object', () => {
+		expect(safeParseEntry('a string')).toBeNull();
+	});
+});
+
+describe('safeParseEntryFromLine()', () => {
+	test('returns parsed entry for a valid V0.1 line', () => {
+		const line = loadRaw('custom-title.json');
+		const result = safeParseEntryFromLine(line);
+		expect(result).not.toBeNull();
+		expect(result?.type).toBe('custom-title');
 	});
 
 	test('returns null for corrupted JSON', () => {
-		const line = loadRaw('corrupted.txt');
-		const result = safeParseEntry(line);
-		expect(result).toBeNull();
+		expect(safeParseEntryFromLine(loadRaw('corrupted.txt'))).toBeNull();
 	});
 
 	test('returns null for empty string', () => {
-		expect(safeParseEntry('')).toBeNull();
+		expect(safeParseEntryFromLine('')).toBeNull();
 	});
 
 	test('returns null for non-object JSON (e.g. string)', () => {
-		expect(safeParseEntry('"a string"')).toBeNull();
+		expect(safeParseEntryFromLine('"a string"')).toBeNull();
 	});
 });
