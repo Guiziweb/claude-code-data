@@ -32,7 +32,8 @@
 		"format": "biome format --write .",
 		"check": "biome check .",
 		"schema:export": "bun scripts/export-schema.ts",
-		"probe:local": "bun scripts/probe-local.ts"
+		"probe:local": "bun scripts/probe-local.ts",
+		"prepare": "git config core.hooksPath .githooks"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.14",
