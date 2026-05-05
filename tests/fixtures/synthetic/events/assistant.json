@@ -1,0 +1,16 @@
+{
+	"type": "assistant",
+	"uuid": "00000000-0000-0000-0000-000000000002",
+	"parentUuid": "00000000-0000-0000-0000-000000000001",
+	"isSidechain": false,
+	"sessionId": "00000000-0000-0000-0000-000000000aaa",
+	"timestamp": "2026-05-05T10:00:01.000Z",
+	"version": "2.1.0",
+	"cwd": "/Users/test/project",
+	"userType": "external",
+	"message": {
+		"role": "assistant",
+		"model": "claude-opus-4-7",
+		"content": [{ "type": "text", "text": "Hi" }]
+	}
+}

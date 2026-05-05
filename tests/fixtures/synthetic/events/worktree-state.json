@@ -1,0 +1,10 @@
+{
+	"type": "worktree-state",
+	"sessionId": "00000000-0000-0000-0000-000000000aaa",
+	"worktreeSession": {
+		"originalCwd": "/Users/test/project",
+		"worktreePath": "/Users/test/project-wt-feat",
+		"worktreeName": "feat-login",
+		"sessionId": "00000000-0000-0000-0000-000000000aaa"
+	}
+}
