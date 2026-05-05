@@ -1,0 +1,6 @@
+{
+	"type": "tool_result",
+	"tool_use_id": "toolu_01YKQ6N9Qg1MGu3dBvpqztFB",
+	"content": [{ "type": "text", "text": "file.ts\nindex.ts" }],
+	"is_error": false
+}

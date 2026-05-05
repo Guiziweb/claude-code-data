@@ -1,0 +1,7 @@
+{
+	"type": "tool_use",
+	"id": "toolu_01YKQ6N9Qg1MGu3dBvpqztFB",
+	"name": "Bash",
+	"input": { "command": "ls -la" },
+	"caller": { "type": "direct" }
+}
