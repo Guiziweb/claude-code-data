@@ -11,6 +11,8 @@ const TranscriptMessageBase = {
 	version: v.string(),
 	cwd: v.string(),
 	userType: v.string(),
+	// message payload — looseObject so unknown fields (e.g. model, usage, content) pass through.
+	// Consumers that need typed sub-fields (model, content) cast via helper functions.
 	message: v.looseObject({}),
 	entrypoint: v.optional(v.string()),
 	gitBranch: v.optional(v.string()),
@@ -21,6 +23,12 @@ const TranscriptMessageBase = {
 	agentName: v.optional(v.string()),
 	agentColor: v.optional(v.string()),
 	promptId: v.optional(v.string()),
+	// CC marks tool-result-only user messages and compact summaries with these flags.
+	// Verified in sessionStorage.ts (getFirstMeaningfulUserMessageTextContent).
+	isMeta: v.optional(v.boolean()),
+	isCompactSummary: v.optional(v.boolean()),
+	// Used for dedup of assistant entries replayed after /resume.
+	requestId: v.optional(v.string()),
 };
 
 export const TranscriptMessageUserSchema = v.looseObject({
