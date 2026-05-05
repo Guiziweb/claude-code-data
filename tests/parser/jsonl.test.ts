@@ -16,8 +16,8 @@ describe('parseJsonlStream()', () => {
 	test('yields typed entries from minimal session', async () => {
 		const entries = await collect(join(FIXTURES, 'session-minimal.jsonl'));
 		expect(entries).toHaveLength(2);
-		expect(entries[0].type).toBe('user');
-		expect(entries[1].type).toBe('assistant');
+		expect(entries[0]?.type).toBe('user');
+		expect(entries[1]?.type).toBe('assistant');
 	});
 
 	test('yields all V0.1 event types including meta', async () => {
@@ -34,8 +34,8 @@ describe('parseJsonlStream()', () => {
 	test('skips corrupted lines without throwing', async () => {
 		const entries = await collect(join(FIXTURES, 'session-corrupted-lines.jsonl'));
 		expect(entries).toHaveLength(2);
-		expect(entries[0].type).toBe('user');
-		expect(entries[1].type).toBe('assistant');
+		expect(entries[0]?.type).toBe('user');
+		expect(entries[1]?.type).toBe('assistant');
 	});
 
 	test('skips unknown variants silently', async () => {
