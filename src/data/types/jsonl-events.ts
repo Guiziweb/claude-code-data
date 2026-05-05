@@ -107,7 +107,13 @@ export const EntryV01Schema = v.variant('type', [
 
 export type EntryV01 = v.InferOutput<typeof EntryV01Schema>;
 
-export function safeParseEntry(line: string): EntryV01 | null {
+export function safeParseEntry(value: unknown): EntryV01 | null {
+	if (value === null || typeof value !== 'object') return null;
+	const result = v.safeParse(EntryV01Schema, value);
+	return result.success ? result.output : null;
+}
+
+export function safeParseEntryFromLine(line: string): EntryV01 | null {
 	if (line.length === 0) return null;
 	let parsed: unknown;
 	try {
@@ -115,7 +121,5 @@ export function safeParseEntry(line: string): EntryV01 | null {
 	} catch {
 		return null;
 	}
-	if (parsed === null || typeof parsed !== 'object') return null;
-	const result = v.safeParse(EntryV01Schema, parsed);
-	return result.success ? result.output : null;
+	return safeParseEntry(parsed);
 }
