@@ -6,7 +6,7 @@ const TranscriptMessageBase = {
 	uuid: Uuid,
 	parentUuid: v.nullable(Uuid),
 	isSidechain: v.boolean(),
-	sessionId: v.string(),
+	sessionId: Uuid,
 	timestamp: v.string(),
 	version: v.string(),
 	cwd: v.string(),
@@ -33,16 +33,14 @@ export const TranscriptMessageAssistantSchema = v.looseObject({
 	...TranscriptMessageBase,
 });
 
-// All meta event schemas use `looseObject`: real CC writes may include
-// fields not documented in `logs.ts` (e.g. `last-prompt` carries a
-// `leafUuid` not present in the source-leak). The canary script (M6.2)
-// surfaces structural drift; the parser stays permissive on shape.
-
-export const SummaryMessageSchema = v.looseObject({
-	type: v.literal('summary'),
-	leafUuid: Uuid,
-	summary: v.string(),
-});
+// V0.1 meta-event schemas: each shape was confirmed against real `~/.claude/`
+// data. Schemas use `looseObject` because real CC writes may carry fields not
+// documented in the source-leak `logs.ts` (e.g. `last-prompt` carries a
+// `leafUuid` we discovered while probing). Events from `logs.ts` that we could
+// not observe in real data (`summary`, `task-summary`, `tag`, `agent-color`,
+// `agent-setting`, `mode`) are intentionally not shipped: they are either
+// legacy, gated to internal `USER_TYPE === 'ant'` builds, or never emitted by
+// public CC. They will be added once we can validate them on real output.
 
 export const CustomTitleMessageSchema = v.looseObject({
 	type: v.literal('custom-title'),
@@ -63,35 +61,10 @@ export const LastPromptMessageSchema = v.looseObject({
 	leafUuid: v.optional(Uuid),
 });
 
-export const TaskSummaryMessageSchema = v.looseObject({
-	type: v.literal('task-summary'),
-	sessionId: Uuid,
-	summary: v.string(),
-	timestamp: v.string(),
-});
-
-export const TagMessageSchema = v.looseObject({
-	type: v.literal('tag'),
-	sessionId: Uuid,
-	tag: v.string(),
-});
-
 export const AgentNameMessageSchema = v.looseObject({
 	type: v.literal('agent-name'),
 	sessionId: Uuid,
 	agentName: v.string(),
-});
-
-export const AgentColorMessageSchema = v.looseObject({
-	type: v.literal('agent-color'),
-	sessionId: Uuid,
-	agentColor: v.string(),
-});
-
-export const AgentSettingMessageSchema = v.looseObject({
-	type: v.literal('agent-setting'),
-	sessionId: Uuid,
-	agentSetting: v.string(),
 });
 
 export const PRLinkMessageSchema = v.looseObject({
@@ -101,12 +74,6 @@ export const PRLinkMessageSchema = v.looseObject({
 	prUrl: v.string(),
 	prRepository: v.string(),
 	timestamp: v.string(),
-});
-
-export const ModeEntrySchema = v.looseObject({
-	type: v.literal('mode'),
-	sessionId: Uuid,
-	mode: v.picklist(['coordinator', 'normal']),
 });
 
 const PersistedWorktreeSessionSchema = v.looseObject({
@@ -130,17 +97,11 @@ export const WorktreeStateEntrySchema = v.looseObject({
 export const EntryV01Schema = v.variant('type', [
 	TranscriptMessageUserSchema,
 	TranscriptMessageAssistantSchema,
-	SummaryMessageSchema,
 	CustomTitleMessageSchema,
 	AiTitleMessageSchema,
 	LastPromptMessageSchema,
-	TaskSummaryMessageSchema,
-	TagMessageSchema,
 	AgentNameMessageSchema,
-	AgentColorMessageSchema,
-	AgentSettingMessageSchema,
 	PRLinkMessageSchema,
-	ModeEntrySchema,
 	WorktreeStateEntrySchema,
 ]);
 

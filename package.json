@@ -31,7 +31,8 @@
 		"lint": "biome lint .",
 		"format": "biome format --write .",
 		"check": "biome check .",
-		"schema:export": "bun scripts/export-schema.ts"
+		"schema:export": "bun scripts/export-schema.ts",
+		"probe:local": "bun scripts/probe-local.ts"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.14",

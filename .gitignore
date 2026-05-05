@@ -2,6 +2,9 @@
 PLAN.md
 DECISIONS.md
 
+# Scripts locaux (lisent ~/.claude/ — non publiés)
+scripts/probe-local.ts
+
 # Node / Bun
 node_modules/
 *.log
