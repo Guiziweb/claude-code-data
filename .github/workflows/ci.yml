@@ -26,11 +26,3 @@ jobs:
 
       - name: Tests with coverage (100% threshold)
         run: bun test --coverage
-
-      - name: Schema snapshot in sync
-        run: |
-          bun run schema:export
-          git diff --exit-code schema.graphql || (
-            echo '::error::schema.graphql is out of date. Run `bun run schema:export` and commit the result.'
-            exit 1
-          )

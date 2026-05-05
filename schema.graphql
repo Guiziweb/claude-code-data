@@ -1,4 +1,0 @@
-type Query {
-  """Health-check probe. Always returns "pong"."""
-  ping: String
-}
