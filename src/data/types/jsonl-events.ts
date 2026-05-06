@@ -237,7 +237,10 @@ export type FileHistorySnapshotEntry = {
 
 /**
  * Per-file attribution state tracking Claude's character contributions.
- * Used by M3.4 (`claudeCharsByFile`). Last-wins — each entry is a full state snapshot.
+ * Last-wins — each entry is a full state snapshot (never summed across entries).
+ *
+ * **Note**: gated behind CC's internal `COMMIT_ATTRIBUTION` feature flag —
+ * not emitted by public CC builds.
  */
 export type AttributionSnapshotEntry = {
 	type: 'attribution-snapshot';
@@ -264,6 +267,9 @@ export type AttributionSnapshotEntry = {
  * (code-named "marble-origami"). When the context window fills up, CC archives
  * a span of old messages and replaces them with a compact summary placeholder.
  * This entry records the boundaries of the archived span so it can be restored on `/resume`.
+ *
+ * **Note**: gated behind CC's internal `CONTEXT_COLLAPSE` feature flag —
+ * not emitted by public CC builds.
  */
 export type ContextCollapseCommitEntry = {
 	type: 'marble-origami-commit';

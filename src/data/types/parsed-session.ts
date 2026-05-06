@@ -175,6 +175,20 @@ export type ParsedSession = {
 	 */
 	hourOfDay: number[];
 
+	/**
+	 * Characters written by Claude per file path, from the last `attribution-snapshot` entry.
+	 * Last-wins — CC never shrinks `fileStates`, so the final snapshot holds cumulative totals.
+	 * `undefined` when the session has no `attribution-snapshot` events.
+	 *
+	 * **Note**: `attribution-snapshot` is gated behind CC's internal `COMMIT_ATTRIBUTION`
+	 * feature flag and is not emitted by public CC builds. This field will be `undefined`
+	 * for all users of the public CC release.
+	 *
+	 * Mirrors CC `commitAttribution.ts` restore logic: only the last snapshot is used,
+	 * never summed across snapshots (which would cause quadratic count inflation).
+	 */
+	claudeCharsByFile: Record<string, number> | undefined;
+
 	/** All main-transcript turns (user + assistant), in order. Deduplicated after `/resume`. */
 	turns: MessageEntry[];
 	/**
