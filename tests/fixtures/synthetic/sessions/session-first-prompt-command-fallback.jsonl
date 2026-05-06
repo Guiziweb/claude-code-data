@@ -1,0 +1,1 @@
+{"type":"user","uuid":"00000000-0000-0000-0000-000000000001","parentUuid":null,"isSidechain":false,"sessionId":"00000000-0000-0000-0000-000000000aaa","timestamp":"2026-05-01T10:00:00.000Z","version":"2.1.0","cwd":"/project","userType":"external","message":{"role":"user","content":[{"type":"text","text":"<command-name>voice</command-name>\n  "}]}}

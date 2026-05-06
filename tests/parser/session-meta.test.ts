@@ -30,14 +30,55 @@ describe('aggregateSession()', () => {
 		expect(s.prRepository).toBe('owner/repo');
 	});
 
-	test('firstUserText — first non-meta text', async () => {
+	test('firstPrompt — first non-meta text', async () => {
 		const s = await parse('session-minimal.jsonl');
-		expect(s.firstUserText).toBe('Hello');
+		expect(s.firstPrompt).toBe('Hello');
 	});
 
-	test('firstUserText — skips isMeta messages', async () => {
+	test('firstPrompt — bash-input → ! prefix (CC-exact)', async () => {
+		const s = await parse('session-first-prompt-bash.jsonl');
+		expect(s.firstPrompt).toBe('! git log --oneline -5');
+	});
+
+	test('firstPrompt — skips XML-like prefixes, falls through to next message', async () => {
+		const s = await parse('session-first-prompt-skip.jsonl');
+		expect(s.firstPrompt).toBe('real user message');
+	});
+
+	test('firstPrompt — command fallback when only slash commands', async () => {
+		const s = await parse('session-first-prompt-command-fallback.jsonl');
+		expect(s.firstPrompt).toBe('voice');
+	});
+
+	test('firstPrompt — skips [Request interrupted by user...]', async () => {
+		const s = await parse('session-first-prompt-interrupted.jsonl');
+		expect(s.firstPrompt).toBe('real prompt after interrupt');
+	});
+
+	test('firstPrompt — truncates to 200 chars + ellipsis', async () => {
+		const long = 'a'.repeat(250);
+		const s = await aggregateSession(
+			(async function* () {
+				yield {
+					type: 'user' as const,
+					uuid: '00000000-0000-0000-0000-000000000001',
+					parentUuid: null,
+					isSidechain: false,
+					sessionId: '00000000-0000-0000-0000-000000000aaa',
+					timestamp: '2026-05-01T10:00:00.000Z',
+					version: '2.1.0',
+					cwd: '/project',
+					userType: 'external',
+					message: { role: 'user', content: [{ type: 'text', text: long }] },
+				};
+			})()
+		);
+		expect(s.firstPrompt).toBe(`${'a'.repeat(200)}…`);
+	});
+
+	test('firstPrompt — skips isMeta messages', async () => {
 		const s = await parse('session-meta-messages.jsonl');
-		expect(s.firstUserText).toBe('real first prompt');
+		expect(s.firstPrompt).toBe('real first prompt');
 	});
 
 	test('userMessageCount — skips isMeta messages', async () => {
@@ -48,7 +89,7 @@ describe('aggregateSession()', () => {
 	test('userMessageCount — skips isCompactSummary messages', async () => {
 		const s = await parse('session-compact-summary.jsonl');
 		expect(s.userMessageCount).toBe(1); // compact summary excluded
-		expect(s.firstUserText).toBe('real user message');
+		expect(s.firstPrompt).toBe('real user message');
 	});
 
 	test('userMessageCount — skips text block with empty string', async () => {
@@ -90,14 +131,14 @@ describe('aggregateSession()', () => {
 		expect(s.subagentTurns.get('agent-abc123')).toHaveLength(2);
 	});
 
-	test('firstUserText — skips tool_result-only messages', async () => {
+	test('firstPrompt — skips tool_result-only messages', async () => {
 		const s = await parse('session-tool-result-only.jsonl');
-		expect(s.firstUserText).toBe('Real prompt');
+		expect(s.firstPrompt).toBe('Real prompt');
 	});
 
-	test('firstUserText — string content (legacy format)', async () => {
+	test('firstPrompt — string content (legacy format)', async () => {
 		const s = await parse('session-string-content.jsonl');
-		expect(s.firstUserText).toBe('Hello from string content');
+		expect(s.firstPrompt).toBe('Hello from string content');
 	});
 
 	test('dedup — assistant entries replayed after /resume are counted once', async () => {
@@ -198,7 +239,7 @@ describe('aggregateSession()', () => {
 		expect(s.sessionId).toBeUndefined();
 		expect(s.turns).toHaveLength(0);
 		expect(s.durationMs).toBe(0);
-		expect(s.firstUserText).toBeUndefined();
+		expect(s.firstPrompt).toBeUndefined();
 		expect(s.lastModel).toBeUndefined();
 	});
 

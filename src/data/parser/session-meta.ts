@@ -1,5 +1,5 @@
 import type { SessionEntry } from '../types/jsonl-events';
-import { extractTextFromContent, getMessageId, getMessageModel } from '../types/message-helpers';
+import { getMessageId, getMessageModel } from '../types/message-helpers';
 import type {
 	ContextTurn,
 	MessageEntry,
@@ -8,6 +8,54 @@ import type {
 } from '../types/parsed-session';
 
 const SYNTHETIC_MODEL = '<synthetic>';
+
+// Mirrors CC sessionStoragePortable.ts — patterns for extractFirstPromptFromHead
+const SKIP_FIRST_PROMPT_RE = /^(?:\s*<[a-z][\w-]*[\s>]|\[Request interrupted by user[^\]]*\])/;
+const COMMAND_NAME_RE = /<command-name>(.*?)<\/command-name>/;
+const BASH_INPUT_RE = /<bash-input>([\s\S]*?)<\/bash-input>/;
+
+/**
+ * Extracts the first meaningful user prompt from a message content.
+ * Mirrors CC `extractFirstPromptFromHead` (sessionStoragePortable.ts):
+ * - `<bash-input>cmd</bash-input>` → `! cmd`
+ * - Skips XML-like prefixes and `[Request interrupted...]`
+ * - Truncates to 200 chars + `…`
+ * - Falls back to the first `<command-name>` if no plain text found
+ */
+function extractFirstPrompt(content: unknown): { prompt: string; isCommand: boolean } | null {
+	const rawTexts: string[] = [];
+	if (typeof content === 'string') {
+		rawTexts.push(content);
+	} else if (Array.isArray(content)) {
+		for (const block of content as Array<Record<string, unknown>>) {
+			if (block.type === 'text' && typeof block.text === 'string') rawTexts.push(block.text);
+		}
+	}
+
+	let commandFallback: string | undefined;
+
+	for (const raw of rawTexts) {
+		const result = raw.replace(/\n/g, ' ').trim();
+		if (!result) continue;
+
+		const cmdMatch = COMMAND_NAME_RE.exec(result);
+		if (cmdMatch) {
+			if (!commandFallback) commandFallback = cmdMatch[1] ?? '';
+			continue;
+		}
+
+		const bashMatch = BASH_INPUT_RE.exec(result);
+		if (bashMatch) return { prompt: `! ${(bashMatch[1] ?? '').trim()}`, isCommand: false };
+
+		if (SKIP_FIRST_PROMPT_RE.test(result)) continue;
+
+		const truncated = result.length > 200 ? `${result.slice(0, 200).trim()}…` : result;
+		return { prompt: truncated, isCommand: false };
+	}
+
+	if (commandFallback) return { prompt: commandFallback, isCommand: true };
+	return null;
+}
 
 const HOURS_IN_DAY = 24;
 
@@ -85,7 +133,8 @@ export async function aggregateSession(
 	let prRepository: string | undefined;
 	let worktreePath: string | null | undefined;
 	let worktreeBranch: string | undefined;
-	let firstUserText: string | undefined;
+	let firstPrompt: string | undefined;
+	let firstPromptCommandFallback: string | undefined;
 	let lastModel: string | undefined;
 	const modelCounts: Record<string, number> = {};
 	// gitBranch: last-wins — mirrors CC's extractLastJsonStringField behaviour.
@@ -187,9 +236,12 @@ export async function aggregateSession(
 						const hour = entry.timestamp ? new Date(entry.timestamp).getHours() : -1;
 						if (hour >= 0 && hour < HOURS_IN_DAY) (hourOfDay[hour] as number)++;
 					}
-					if (firstUserText === undefined) {
-						const text = extractTextFromContent(entry.message.content);
-						if (text) firstUserText = text;
+					if (firstPrompt === undefined) {
+						const extracted = extractFirstPrompt(entry.message.content);
+						if (extracted) {
+							if (!extracted.isCommand) firstPrompt = extracted.prompt;
+							else if (!firstPromptCommandFallback) firstPromptCommandFallback = extracted.prompt;
+						}
 					}
 				}
 				routeTurn(entry, turns, subagentTurns);
@@ -296,7 +348,7 @@ export async function aggregateSession(
 		prRepository,
 		worktreePath,
 		worktreeBranch,
-		firstUserText,
+		firstPrompt: firstPrompt ?? firstPromptCommandFallback,
 		lastModel,
 		primaryModel,
 		gitBranch,
