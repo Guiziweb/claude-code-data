@@ -1,6 +1,6 @@
 import { createReadStream, existsSync } from 'node:fs';
 import { createInterface } from 'node:readline';
-import type { EntryV01 } from '../types/jsonl-events';
+import type { SessionEntry } from '../types/jsonl-events';
 import { safeParseEntry } from '../types/jsonl-events';
 
 // Legacy progress entries have type:'progress' + uuid + parentUuid.
@@ -29,7 +29,7 @@ function isLegacyProgress(parsed: unknown): boolean {
  * }
  * ```
  */
-export async function* parseJsonlStream(filePath: string): AsyncIterable<EntryV01> {
+export async function* parseJsonlStream(filePath: string): AsyncIterable<SessionEntry> {
 	if (!existsSync(filePath)) return;
 
 	const rl = createInterface({

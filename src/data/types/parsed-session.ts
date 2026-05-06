@@ -1,7 +1,7 @@
-import type { EntryV01 } from './jsonl-events';
+import type { SessionEntry } from './jsonl-events';
 
 /** A single user or assistant message in a session transcript. */
-export type Turn = Extract<EntryV01, { type: 'user' | 'assistant' }>;
+export type Turn = Extract<SessionEntry, { type: 'user' | 'assistant' }>;
 
 /** Result of {@link aggregateSession} — all data extracted from a single session file. */
 export type ParsedSession = {

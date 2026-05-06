@@ -26,3 +26,6 @@ jobs:
 
       - name: Tests with coverage (100% threshold)
         run: bun test --coverage
+
+      - name: TypeDoc build (public API must document cleanly)
+        run: bunx typedoc --entryPoints src/index.ts --out docs --treatWarningsAsErrors

@@ -1,20 +1,18 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import * as v from 'valibot';
-import {
-	AgentNameMessageSchema,
-	AiTitleMessageSchema,
-	CustomTitleMessageSchema,
-	EntryV01Schema,
-	LastPromptMessageSchema,
-	PRLinkMessageSchema,
-	safeParseEntry,
-	safeParseEntryFromLine,
-	TranscriptMessageAssistantSchema,
-	TranscriptMessageUserSchema,
-	WorktreeStateEntrySchema,
+import type {
+	AgentNameEntry,
+	AiTitleEntry,
+	AssistantEntry,
+	CustomTitleEntry,
+	LastPromptEntry,
+	PrLinkEntry,
+	SessionEntry,
+	UserEntry,
+	WorktreeStateEntry,
 } from '../../src/data/types/jsonl-events';
+import { safeParseEntry, safeParseEntryFromLine } from '../../src/data/types/jsonl-events';
 
 const FIXTURES = join(import.meta.dir, '..', 'fixtures', 'synthetic', 'events');
 
@@ -26,71 +24,74 @@ function loadRaw(name: string): string {
 	return readFileSync(join(FIXTURES, name), 'utf8').trimEnd();
 }
 
-describe('individual event schemas', () => {
+describe('safeParseEntry() — individual event types', () => {
 	test('user (TranscriptMessage)', () => {
-		const data = loadJson('user.json');
-		expect(() => v.parse(TranscriptMessageUserSchema, data)).not.toThrow();
+		const result = safeParseEntry(loadJson('user.json')) as UserEntry;
+		expect(result).not.toBeNull();
+		expect(result.type).toBe('user');
 	});
 
 	test('assistant (TranscriptMessage)', () => {
-		const data = loadJson('assistant.json');
-		expect(() => v.parse(TranscriptMessageAssistantSchema, data)).not.toThrow();
+		const result = safeParseEntry(loadJson('assistant.json')) as AssistantEntry;
+		expect(result).not.toBeNull();
+		expect(result.type).toBe('assistant');
 	});
 
 	test('custom-title', () => {
-		const data = loadJson('custom-title.json');
-		const parsed = v.parse(CustomTitleMessageSchema, data);
-		expect(parsed.customTitle).toBe('Refactor auth');
+		const result = safeParseEntry(loadJson('custom-title.json')) as CustomTitleEntry;
+		expect(result).not.toBeNull();
+		expect(result.customTitle).toBe('Refactor auth');
 	});
 
 	test('ai-title', () => {
-		const data = loadJson('ai-title.json');
-		const parsed = v.parse(AiTitleMessageSchema, data);
-		expect(parsed.aiTitle).toBe('Login refactor session');
+		const result = safeParseEntry(loadJson('ai-title.json')) as AiTitleEntry;
+		expect(result).not.toBeNull();
+		expect(result.aiTitle).toBe('Login refactor session');
 	});
 
 	test('last-prompt', () => {
-		const data = loadJson('last-prompt.json');
-		const parsed = v.parse(LastPromptMessageSchema, data);
-		expect(parsed.lastPrompt).toBe('Continue the work');
+		const result = safeParseEntry(loadJson('last-prompt.json')) as LastPromptEntry;
+		expect(result).not.toBeNull();
+		expect(result.lastPrompt).toBe('Continue the work');
 	});
 
 	test('last-prompt with leafUuid only (no lastPrompt) — real CC variant', () => {
-		const data = loadJson('last-prompt-leafuuid.json');
-		const parsed = v.parse(LastPromptMessageSchema, data);
-		expect(parsed.lastPrompt).toBeUndefined();
-		expect(parsed.leafUuid).toBe('18c5ab3d-11c8-43f8-97aa-f59727b186cd');
+		const result = safeParseEntry(loadJson('last-prompt-leafuuid.json')) as LastPromptEntry;
+		expect(result).not.toBeNull();
+		expect(result.lastPrompt).toBeUndefined();
+		expect(result.leafUuid).toBe('18c5ab3d-11c8-43f8-97aa-f59727b186cd');
 	});
 
 	test('agent-name', () => {
-		const data = loadJson('agent-name.json');
-		expect(v.parse(AgentNameMessageSchema, data).agentName).toBe('reviewer');
+		const result = safeParseEntry(loadJson('agent-name.json')) as AgentNameEntry;
+		expect(result).not.toBeNull();
+		expect(result.agentName).toBe('reviewer');
 	});
 
 	test('pr-link', () => {
-		const data = loadJson('pr-link.json');
-		const parsed = v.parse(PRLinkMessageSchema, data);
-		expect(parsed.prNumber).toBe(123);
-		expect(parsed.prUrl).toBe('https://github.com/owner/repo/pull/123');
-		expect(parsed.prRepository).toBe('owner/repo');
+		const result = safeParseEntry(loadJson('pr-link.json')) as PrLinkEntry;
+		expect(result).not.toBeNull();
+		expect(result.prNumber).toBe(123);
+		expect(result.prUrl).toBe('https://github.com/owner/repo/pull/123');
+		expect(result.prRepository).toBe('owner/repo');
 	});
 
 	test('worktree-state with session payload', () => {
-		const data = loadJson('worktree-state.json');
-		const parsed = v.parse(WorktreeStateEntrySchema, data);
-		expect(parsed.worktreeSession?.worktreePath).toBe('/Users/test/project-wt-feat');
+		const result = safeParseEntry(loadJson('worktree-state.json')) as WorktreeStateEntry;
+		expect(result).not.toBeNull();
+		expect(result.worktreeSession?.worktreePath).toBe('/Users/test/project-wt-feat');
 	});
 
 	test('worktree-state on exit (null payload)', () => {
-		const data = loadJson('worktree-state-exit.json');
-		const parsed = v.parse(WorktreeStateEntrySchema, data);
-		expect(parsed.worktreeSession).toBeNull();
+		const result = safeParseEntry(loadJson('worktree-state-exit.json')) as WorktreeStateEntry;
+		expect(result).not.toBeNull();
+		expect(result.worktreeSession).toBeNull();
 	});
 });
 
-describe('EntryV01Schema (union)', () => {
+describe('safeParseEntry() — union', () => {
 	test('accepts each known event type', () => {
-		const knownFiles = [
+		const files = [
 			'user.json',
 			'assistant.json',
 			'custom-title.json',
@@ -100,29 +101,14 @@ describe('EntryV01Schema (union)', () => {
 			'pr-link.json',
 			'worktree-state.json',
 		];
-		for (const file of knownFiles) {
-			const data = loadJson(file);
-			expect(() => v.parse(EntryV01Schema, data)).not.toThrow();
+		for (const file of files) {
+			const result: SessionEntry | null = safeParseEntry(loadJson(file));
+			expect(result).not.toBeNull();
 		}
 	});
 
-	test('rejects unknown variant', () => {
-		const data = loadJson('unknown-variant.json');
-		expect(() => v.parse(EntryV01Schema, data)).toThrow();
-	});
-});
-
-describe('safeParseEntry()', () => {
-	test('returns parsed entry for a valid V0.1 object', () => {
-		const data = loadJson('custom-title.json');
-		const result = safeParseEntry(data);
-		expect(result).not.toBeNull();
-		expect(result?.type).toBe('custom-title');
-	});
-
-	test('returns null for unknown variant (hors-V0.1)', () => {
-		const data = loadJson('unknown-variant.json');
-		expect(safeParseEntry(data)).toBeNull();
+	test('returns null for unknown variant', () => {
+		expect(safeParseEntry(loadJson('unknown-variant.json'))).toBeNull();
 	});
 
 	test('returns null for null', () => {
@@ -136,8 +122,7 @@ describe('safeParseEntry()', () => {
 
 describe('safeParseEntryFromLine()', () => {
 	test('returns parsed entry for a valid V0.1 line', () => {
-		const line = loadRaw('custom-title.json');
-		const result = safeParseEntryFromLine(line);
+		const result = safeParseEntryFromLine(loadRaw('custom-title.json'));
 		expect(result).not.toBeNull();
 		expect(result?.type).toBe('custom-title');
 	});

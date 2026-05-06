@@ -1,4 +1,4 @@
-import type { EntryV01 } from '../types/jsonl-events';
+import type { SessionEntry } from '../types/jsonl-events';
 import { extractTextFromContent, getMessageId, getMessageModel } from '../types/message-helpers';
 import type { ParsedSession, Turn } from '../types/parsed-session';
 
@@ -31,7 +31,9 @@ function routeTurn(entry: Turn, turns: Turn[], subagentTurns: Map<string, Turn[]
  * console.log(session.turns);     // Turn[]
  * ```
  */
-export async function aggregateSession(events: AsyncIterable<EntryV01>): Promise<ParsedSession> {
+export async function aggregateSession(
+	events: AsyncIterable<SessionEntry>
+): Promise<ParsedSession> {
 	let sessionId: string | undefined;
 	let customTitle: string | undefined;
 	let aiTitle: string | undefined;

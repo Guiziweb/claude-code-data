@@ -1,8 +1,147 @@
 import * as v from 'valibot';
 
+// ---------------------------------------------------------------------------
+// Explicit public types — TypeDoc reads these, not the Valibot schemas.
+// ---------------------------------------------------------------------------
+
+/** A user turn in the session transcript. */
+export type UserEntry = {
+	type: 'user';
+	uuid: string;
+	parentUuid: string | null;
+	isSidechain: boolean;
+	sessionId: string;
+	timestamp: string;
+	version: string;
+	cwd: string;
+	userType: string;
+	/** Raw message payload. Use helpers from `message-helpers` to access typed sub-fields. */
+	message: Record<string, unknown>;
+	entrypoint?: string;
+	gitBranch?: string;
+	slug?: string;
+	logicalParentUuid?: string | null;
+	agentId?: string;
+	teamName?: string;
+	agentName?: string;
+	agentColor?: string;
+	promptId?: string;
+	/** Tool-result-only user messages are marked `isMeta: true` by CC. */
+	isMeta?: boolean;
+	/** Compact summary injected by CC's auto-compact are marked `isCompactSummary: true`. */
+	isCompactSummary?: boolean;
+	/** Used to deduplicate assistant entries replayed after `/resume`. */
+	requestId?: string;
+};
+
+/** An assistant turn in the session transcript. */
+export type AssistantEntry = {
+	type: 'assistant';
+	uuid: string;
+	parentUuid: string | null;
+	isSidechain: boolean;
+	sessionId: string;
+	timestamp: string;
+	version: string;
+	cwd: string;
+	userType: string;
+	/** Raw message payload. Use helpers from `message-helpers` to access typed sub-fields. */
+	message: Record<string, unknown>;
+	entrypoint?: string;
+	gitBranch?: string;
+	slug?: string;
+	logicalParentUuid?: string | null;
+	agentId?: string;
+	teamName?: string;
+	agentName?: string;
+	agentColor?: string;
+	promptId?: string;
+	isMeta?: boolean;
+	isCompactSummary?: boolean;
+	requestId?: string;
+};
+
+/** User-defined session title written by CC when `/title` is used. */
+export type CustomTitleEntry = {
+	type: 'custom-title';
+	sessionId: string;
+	customTitle: string;
+};
+
+/** AI-generated session title written by CC at the end of a session. */
+export type AiTitleEntry = {
+	type: 'ai-title';
+	sessionId: string;
+	aiTitle: string;
+};
+
+/** Last user prompt captured by CC for the session resume UI. */
+export type LastPromptEntry = {
+	type: 'last-prompt';
+	sessionId: string;
+	lastPrompt?: string;
+	leafUuid?: string;
+};
+
+/** Custom agent name when the session runs as a named subagent. */
+export type AgentNameEntry = {
+	type: 'agent-name';
+	sessionId: string;
+	agentName: string;
+};
+
+/** GitHub PR linked to this session via `pr-link` event. */
+export type PrLinkEntry = {
+	type: 'pr-link';
+	sessionId: string;
+	prNumber: number;
+	prUrl: string;
+	prRepository: string;
+	timestamp: string;
+};
+
+/** Worktree metadata written when entering or exiting a `claude --worktree` session. */
+export type WorktreeStateEntry = {
+	type: 'worktree-state';
+	sessionId: string;
+	/** `null` means the worktree was exited. */
+	worktreeSession: {
+		originalCwd: string;
+		worktreePath: string;
+		worktreeName: string;
+		worktreeBranch?: string;
+		originalBranch?: string;
+		originalHeadCommit?: string;
+		sessionId: string;
+		tmuxSessionName?: string;
+		hookBased?: boolean;
+	} | null;
+};
+
+/**
+ * Union of all JSONL entry variants parsed from a Claude Code session file.
+ *
+ * Covers the 8 event types reliably emitted by public CC builds (verified on
+ * real `~/.claude/` data). Entries with unknown `type` are silently skipped
+ * by {@link parseJsonlStream}.
+ */
+export type SessionEntry =
+	| UserEntry
+	| AssistantEntry
+	| CustomTitleEntry
+	| AiTitleEntry
+	| LastPromptEntry
+	| AgentNameEntry
+	| PrLinkEntry
+	| WorktreeStateEntry;
+
+// ---------------------------------------------------------------------------
+// Valibot schemas — internal, used only by safeParseEntry / safeParseEntryFromLine.
+// ---------------------------------------------------------------------------
+
 const Uuid = v.pipe(v.string(), v.uuid());
 
-const TranscriptMessageBase = {
+const TranscriptMessageBaseSchema = {
 	uuid: Uuid,
 	parentUuid: v.nullable(Uuid),
 	isSidechain: v.boolean(),
@@ -11,8 +150,6 @@ const TranscriptMessageBase = {
 	version: v.string(),
 	cwd: v.string(),
 	userType: v.string(),
-	// message payload — looseObject so unknown fields (e.g. model, usage, content) pass through.
-	// Consumers that need typed sub-fields (model, content) cast via helper functions.
 	message: v.looseObject({}),
 	entrypoint: v.optional(v.string()),
 	gitBranch: v.optional(v.string()),
@@ -23,59 +160,47 @@ const TranscriptMessageBase = {
 	agentName: v.optional(v.string()),
 	agentColor: v.optional(v.string()),
 	promptId: v.optional(v.string()),
-	// CC marks tool-result-only user messages and compact summaries with these flags.
-	// Verified in sessionStorage.ts (getFirstMeaningfulUserMessageTextContent).
 	isMeta: v.optional(v.boolean()),
 	isCompactSummary: v.optional(v.boolean()),
-	// Used for dedup of assistant entries replayed after /resume.
 	requestId: v.optional(v.string()),
 };
 
-export const TranscriptMessageUserSchema = v.looseObject({
+const TranscriptMessageUserSchema = v.looseObject({
 	type: v.literal('user'),
-	...TranscriptMessageBase,
+	...TranscriptMessageBaseSchema,
 });
 
-export const TranscriptMessageAssistantSchema = v.looseObject({
+const TranscriptMessageAssistantSchema = v.looseObject({
 	type: v.literal('assistant'),
-	...TranscriptMessageBase,
+	...TranscriptMessageBaseSchema,
 });
 
-// V0.1 meta-event schemas: each shape was confirmed against real `~/.claude/`
-// data. Schemas use `looseObject` because real CC writes may carry fields not
-// documented in the source-leak `logs.ts` (e.g. `last-prompt` carries a
-// `leafUuid` we discovered while probing). Events from `logs.ts` that we could
-// not observe in real data (`summary`, `task-summary`, `tag`, `agent-color`,
-// `agent-setting`, `mode`) are intentionally not shipped: they are either
-// legacy, gated to internal `USER_TYPE === 'ant'` builds, or never emitted by
-// public CC. They will be added once we can validate them on real output.
-
-export const CustomTitleMessageSchema = v.looseObject({
+const CustomTitleMessageSchema = v.looseObject({
 	type: v.literal('custom-title'),
 	sessionId: Uuid,
 	customTitle: v.string(),
 });
 
-export const AiTitleMessageSchema = v.looseObject({
+const AiTitleMessageSchema = v.looseObject({
 	type: v.literal('ai-title'),
 	sessionId: Uuid,
 	aiTitle: v.string(),
 });
 
-export const LastPromptMessageSchema = v.looseObject({
+const LastPromptMessageSchema = v.looseObject({
 	type: v.literal('last-prompt'),
 	sessionId: Uuid,
 	lastPrompt: v.optional(v.string()),
 	leafUuid: v.optional(Uuid),
 });
 
-export const AgentNameMessageSchema = v.looseObject({
+const AgentNameMessageSchema = v.looseObject({
 	type: v.literal('agent-name'),
 	sessionId: Uuid,
 	agentName: v.string(),
 });
 
-export const PRLinkMessageSchema = v.looseObject({
+const PRLinkMessageSchema = v.looseObject({
 	type: v.literal('pr-link'),
 	sessionId: Uuid,
 	prNumber: v.number(),
@@ -96,13 +221,13 @@ const PersistedWorktreeSessionSchema = v.looseObject({
 	hookBased: v.optional(v.boolean()),
 });
 
-export const WorktreeStateEntrySchema = v.looseObject({
+const WorktreeStateEntrySchema = v.looseObject({
 	type: v.literal('worktree-state'),
 	sessionId: Uuid,
 	worktreeSession: v.nullable(PersistedWorktreeSessionSchema),
 });
 
-export const EntryV01Schema = v.variant('type', [
+const SessionEntrySchema = v.variant('type', [
 	TranscriptMessageUserSchema,
 	TranscriptMessageAssistantSchema,
 	CustomTitleMessageSchema,
@@ -113,15 +238,15 @@ export const EntryV01Schema = v.variant('type', [
 	WorktreeStateEntrySchema,
 ]);
 
-export type EntryV01 = v.InferOutput<typeof EntryV01Schema>;
-
-export function safeParseEntry(value: unknown): EntryV01 | null {
+/** Parses an unknown value as a {@link SessionEntry}. Returns `null` for unrecognised shapes. */
+export function safeParseEntry(value: unknown): SessionEntry | null {
 	if (value === null || typeof value !== 'object') return null;
-	const result = v.safeParse(EntryV01Schema, value);
-	return result.success ? result.output : null;
+	const result = v.safeParse(SessionEntrySchema, value);
+	return result.success ? (result.output as SessionEntry) : null;
 }
 
-export function safeParseEntryFromLine(line: string): EntryV01 | null {
+/** Parses a raw JSONL line as a {@link SessionEntry}. Returns `null` for invalid JSON or unrecognised shapes. */
+export function safeParseEntryFromLine(line: string): SessionEntry | null {
 	if (line.length === 0) return null;
 	let parsed: unknown;
 	try {
