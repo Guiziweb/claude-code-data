@@ -22,4 +22,9 @@ export type {
 	UserEntry,
 	WorktreeStateEntry,
 } from './data/types/jsonl-events';
-export type { MessageEntry, ParsedSession } from './data/types/parsed-session';
+export type {
+	ContextTurn,
+	MessageEntry,
+	ParsedSession,
+	TokenBuckets,
+} from './data/types/parsed-session';

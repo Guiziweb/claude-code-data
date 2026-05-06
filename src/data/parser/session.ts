@@ -1,3 +1,4 @@
+import type { Dirent } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { MessageEntry, ParsedSession } from '../types/parsed-session';
@@ -22,21 +23,20 @@ async function readSubagentTurns(
 }
 
 async function scanSubagentsDir(dir: string, result: Map<string, MessageEntry[]>): Promise<void> {
-	let entries: string[];
+	let entries: Dirent[];
 	try {
-		entries = await readdir(dir);
+		entries = await readdir(dir, { withFileTypes: true });
 	} catch {
 		return;
 	}
 
-	for (const name of entries) {
-		if (name.startsWith('agent-') && name.endsWith('.jsonl')) {
+	for (const entry of entries) {
+		if (entry.isFile() && entry.name.startsWith('agent-') && entry.name.endsWith('.jsonl')) {
 			// Mirrors CC: name.slice('agent-'.length, -'.jsonl'.length)
-			const agentId = name.slice('agent-'.length, -'.jsonl'.length);
-			await addAgentFile(join(dir, name), agentId, result);
-		} else if (!name.includes('.')) {
-			// Nested subdir (e.g. workflows/<runId>/) — no extension = directory
-			await scanSubagentsDir(join(dir, name), result);
+			const agentId = entry.name.slice('agent-'.length, -'.jsonl'.length);
+			await addAgentFile(join(dir, entry.name), agentId, result);
+		} else if (entry.isDirectory()) {
+			await scanSubagentsDir(join(dir, entry.name), result);
 		}
 	}
 }
