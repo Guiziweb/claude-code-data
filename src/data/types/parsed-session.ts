@@ -60,20 +60,59 @@ export type ParsedSession = {
 	worktreePath: string | null | undefined;
 
 	/**
-	 * Raw text of the first main-transcript user message with non-empty text content.
-	 * Skips: `isMeta`, `isCompactSummary`, subagent messages, tool_result-only entries.
+	 * Raw text of the first human user message in the main transcript.
+	 * Skips entries that are purely tool results, CC system messages (`isMeta`),
+	 * auto-compact summaries (`isCompactSummary`), and subagent turns.
 	 * Not filtered for slash commands — apply your own display logic if needed.
 	 */
 	firstUserText: string | undefined;
-	/** Model used in the last assistant turn. Excludes `<synthetic>` sentinel. */
+	/**
+	 * Model used in the last assistant turn.
+	 * CC uses the sentinel string `'<synthetic>'` for internally-injected messages
+	 * (e.g. compact summaries) — those are excluded here.
+	 */
 	lastModel: string | undefined;
 	/**
-	 * Most-used model by turn count (mode). Excludes `<synthetic>` sentinel.
+	 * Most-used model by turn count (statistical mode). Excludes `'<synthetic>'` sentinel.
 	 * Differs from `lastModel` when the user switched models mid-session.
+	 * Tie-breaking is insertion-order dependent (first model with the highest count wins).
 	 */
 	primaryModel: string | undefined;
 	/** Git branch at session end (last-wins, mirrors Claude Code convention). */
 	gitBranch: string | undefined;
+	/**
+	 * Git branch of the worktree when the session ran inside `claude --worktree`.
+	 * `undefined` when no worktree event was seen, or after a worktree-exit event
+	 * (mirrors `worktreePath` semantics: both reset to `undefined` / `null` on exit).
+	 */
+	worktreeBranch: string | undefined;
+	/** Session mode: `'coordinator'` when orchestrating subagents, `'normal'` otherwise. */
+	mode: 'coordinator' | 'normal' | undefined;
+	/**
+	 * Permission level active for the session (from `permission-mode` events).
+	 * Observed values: `'default'`, `'acceptEdits'`, `'plan'`. Not exhaustive —
+	 * CC may emit additional values in future versions.
+	 */
+	permissionMode: string | undefined;
+	/** User-defined tag label attached to the session. */
+	tag: string | undefined;
+	/** Custom agent name set via `/rename` or swarm configuration. */
+	agentName: string | undefined;
+	/**
+	 * Agent preset name used for this session (from `--agent` CLI flag or `settings.agent`).
+	 * Displayed as `@<agentSetting>` in the Claude Code session list.
+	 */
+	agentSetting: string | undefined;
+	/**
+	 * Most recent auto-compact summary injected when CC compressed the context.
+	 * Last-wins — a session can have multiple compaction events.
+	 */
+	summary: string | undefined;
+	/**
+	 * Most recent periodic fork summary written every min(5 steps, 2 min).
+	 * Mirrors what `claude ps` shows as the current task description.
+	 */
+	taskSummary: string | undefined;
 	/** ISO timestamp of the first entry. */
 	firstTimestamp: string | undefined;
 	/** ISO timestamp of the last entry. */
@@ -98,7 +137,9 @@ export type ParsedSession = {
 	contextByTurn: ContextTurn[];
 	/**
 	 * Context window fill at session end: `input + cacheRead + cacheCreation` of the last
-	 * deduplicated assistant turn. Represents what you'd resume from.
+	 * deduplicated assistant turn. `output` is excluded because it is not part of the prompt
+	 * sent to the model — it represents what you'd resume from if you called `/resume` now.
+	 * `0` if the session has no assistant turns with token data.
 	 */
 	lastContextTokens: number;
 
@@ -116,12 +157,16 @@ export type ParsedSession = {
 	assistantMessageCount: number;
 
 	/**
-	 * Tool invocation counts keyed by tool name.
+	 * Tool invocation counts keyed by tool name (e.g. `Read`, `Bash`, `Edit`).
 	 * Deduplicated on `tool_use.id` — streaming entries sharing the same call counted once.
-	 * `Skill` invocations are tracked in `skillUsage` instead.
+	 * `Skill` invocations (Claude Code slash-command extensions) are tracked in `skillUsage` instead.
 	 */
 	toolUsage: Record<string, number>;
-	/** Skill invocation counts keyed by skill name (from `Skill` tool_use `input.skill`). */
+	/**
+	 * Skill invocation counts keyed by skill name.
+	 * Skills are Claude Code slash-command extensions invoked via the `Skill` tool
+	 * (e.g. `ultrareview`, `voice`). Keyed by `input.skill` from the `tool_use` block.
+	 */
 	skillUsage: Record<string, number>;
 	/**
 	 * Human user message count per local hour of day [0..23].

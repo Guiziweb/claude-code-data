@@ -98,8 +98,17 @@ describe('safeParseEntry() — union', () => {
 			'ai-title.json',
 			'last-prompt.json',
 			'agent-name.json',
+			'agent-color.json',
 			'pr-link.json',
 			'worktree-state.json',
+			'tag.json',
+			'mode.json',
+			'permission-mode.json',
+			'summary.json',
+			'task-summary.json',
+			'agent-setting.json',
+			'attribution-snapshot.json',
+			'speculation-accept.json',
 		];
 		for (const file of files) {
 			const result: SessionEntry | null = safeParseEntry(loadJson(file));

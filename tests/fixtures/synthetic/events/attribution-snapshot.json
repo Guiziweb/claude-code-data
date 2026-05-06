@@ -1,0 +1,9 @@
+{
+	"type": "attribution-snapshot",
+	"messageId": "00000000-0000-0000-0000-000000000abc",
+	"surface": "cli",
+	"fileStates": {
+		"src/index.ts": { "contentHash": "abc123", "claudeContribution": 450, "mtime": 1746000000000 }
+	},
+	"promptCount": 12
+}

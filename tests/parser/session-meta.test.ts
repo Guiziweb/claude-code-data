@@ -116,6 +116,66 @@ describe('aggregateSession()', () => {
 		expect(s.assistantMessageCount).toBe(1); // not 2
 	});
 
+	describe('M3.3 meta fields (session-meta3.jsonl)', () => {
+		test('tag — last-wins', async () => {
+			const s = await parse('session-meta3.jsonl');
+			expect(s.tag).toBe('release-prep');
+		});
+
+		test('agentName — last-wins', async () => {
+			const s = await parse('session-meta3.jsonl');
+			expect(s.agentName).toBe('my-agent');
+		});
+
+		test('agentSetting — last-wins', async () => {
+			const s = await parse('session-meta3.jsonl');
+			expect(s.agentSetting).toBe('model=claude-opus-4-7');
+		});
+
+		test('mode — last-wins', async () => {
+			const s = await parse('session-meta3.jsonl');
+			expect(s.mode).toBe('coordinator');
+		});
+
+		test('permissionMode — last-wins', async () => {
+			const s = await parse('session-meta3.jsonl');
+			expect(s.permissionMode).toBe('bypassPermissions');
+		});
+
+		test('summary — last-wins', async () => {
+			const s = await parse('session-meta3.jsonl');
+			expect(s.summary).toBe('Auto-compact summary text');
+		});
+
+		test('taskSummary — last-wins', async () => {
+			const s = await parse('session-meta3.jsonl');
+			expect(s.taskSummary).toBe('Currently parsing events');
+		});
+
+		test('worktreeBranch — extracted from worktree-state', async () => {
+			const s = await parse('session-meta3.jsonl');
+			expect(s.worktreeBranch).toBe('feat/my-feature');
+		});
+
+		test('undefined when absent', async () => {
+			const s = await parse('session-minimal.jsonl');
+			expect(s.tag).toBeUndefined();
+			expect(s.agentName).toBeUndefined();
+			expect(s.agentSetting).toBeUndefined();
+			expect(s.mode).toBeUndefined();
+			expect(s.permissionMode).toBeUndefined();
+			expect(s.summary).toBeUndefined();
+			expect(s.taskSummary).toBeUndefined();
+			expect(s.worktreeBranch).toBeUndefined();
+		});
+
+		test('worktreeBranch — undefined after worktree exit (mirrors worktreePath)', async () => {
+			const s = await parse('session-worktree-with-branch.jsonl');
+			expect(s.worktreePath).toBeNull();
+			expect(s.worktreeBranch).toBeUndefined();
+		});
+	});
+
 	test('empty session — zero values', async () => {
 		const s = await parse('does-not-exist.jsonl');
 		expect(s.sessionId).toBeUndefined();
