@@ -1,4 +1,4 @@
-import type { EntryV01 } from '../types/jsonl-events';
+import type { SessionEntry } from '../types/jsonl-events';
 import { extractTextFromContent, getMessageId, getMessageModel } from '../types/message-helpers';
 import type { ParsedSession, Turn } from '../types/parsed-session';
 
@@ -14,7 +14,26 @@ function routeTurn(entry: Turn, turns: Turn[], subagentTurns: Map<string, Turn[]
 	}
 }
 
-export async function aggregateSession(events: AsyncIterable<EntryV01>): Promise<ParsedSession> {
+/**
+ * Aggregates a stream of JSONL entries into a single {@link ParsedSession}.
+ *
+ * Single-pass — reads each entry once. Handles:
+ * - Meta events (last-wins): `customTitle`, `aiTitle`, `gitBranch`, `prNumber`, etc.
+ * - Deduplication of assistant entries replayed after `/resume`
+ * - Routing of subagent turns into `subagentTurns` by `agentId`
+ *
+ * Pair with {@link parseJsonlStream} to go from file path to session:
+ *
+ * @example
+ * ```ts
+ * const session = await aggregateSession(parseJsonlStream('/path/to/session.jsonl'));
+ * console.log(session.gitBranch); // 'feat/my-feature'
+ * console.log(session.turns);     // Turn[]
+ * ```
+ */
+export async function aggregateSession(
+	events: AsyncIterable<SessionEntry>
+): Promise<ParsedSession> {
 	let sessionId: string | undefined;
 	let customTitle: string | undefined;
 	let aiTitle: string | undefined;

@@ -1,6 +1,6 @@
 import { createReadStream, existsSync } from 'node:fs';
 import { createInterface } from 'node:readline';
-import type { EntryV01 } from '../types/jsonl-events';
+import type { SessionEntry } from '../types/jsonl-events';
 import { safeParseEntry } from '../types/jsonl-events';
 
 // Legacy progress entries have type:'progress' + uuid + parentUuid.
@@ -13,7 +13,23 @@ function isLegacyProgress(parsed: unknown): boolean {
 	);
 }
 
-export async function* parseJsonlStream(filePath: string): AsyncIterable<EntryV01> {
+/**
+ * Reads a Claude Code session file (`.jsonl`) and yields each entry one by one.
+ *
+ * Memory-bounded — streams line by line, never loads the full file.
+ * Silently skips corrupted lines, unknown event types, and legacy entries.
+ * Returns an empty stream if the file does not exist.
+ *
+ * @param filePath Absolute path to a `.jsonl` session file (e.g. `~/.claude/projects/<slug>/<sessionId>.jsonl`)
+ *
+ * @example
+ * ```ts
+ * for await (const entry of parseJsonlStream('/path/to/session.jsonl')) {
+ *   console.log(entry.type); // 'user' | 'assistant' | 'custom-title' | ...
+ * }
+ * ```
+ */
+export async function* parseJsonlStream(filePath: string): AsyncIterable<SessionEntry> {
 	if (!existsSync(filePath)) return;
 
 	const rl = createInterface({
