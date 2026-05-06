@@ -176,6 +176,23 @@ describe('aggregateSession()', () => {
 		});
 	});
 
+	describe('claudeCharsByFile (session-attribution.jsonl)', () => {
+		test('last attribution-snapshot wins — not summed across snapshots', async () => {
+			const s = await parse('session-attribution.jsonl');
+			// Second snapshot: index.ts=600, utils.ts=200, new.ts=80 — not first (450, 120)
+			expect(s.claudeCharsByFile).toEqual({
+				'src/index.ts': 600,
+				'src/utils.ts': 200,
+				'src/new.ts': 80,
+			});
+		});
+
+		test('undefined when no attribution-snapshot', async () => {
+			const s = await parse('session-minimal.jsonl');
+			expect(s.claudeCharsByFile).toBeUndefined();
+		});
+	});
+
 	test('empty session — zero values', async () => {
 		const s = await parse('does-not-exist.jsonl');
 		expect(s.sessionId).toBeUndefined();

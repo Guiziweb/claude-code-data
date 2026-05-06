@@ -96,6 +96,7 @@ export async function aggregateSession(
 	let agentName: string | undefined;
 	let agentSetting: string | undefined;
 	let summary: string | undefined;
+	let claudeCharsByFile: Record<string, number> | undefined;
 	let taskSummary: string | undefined;
 	let firstTimestamp: string | undefined;
 	let lastTimestamp: string | undefined;
@@ -165,6 +166,15 @@ export async function aggregateSession(
 			case 'task-summary':
 				taskSummary = entry.summary;
 				break;
+			case 'attribution-snapshot': {
+				// Last-wins — fileStates never shrinks, so the last snapshot holds cumulative totals.
+				// Mirrors CC commitAttribution.ts: only the last snapshot is used, never summed.
+				claudeCharsByFile = {};
+				for (const [path, state] of Object.entries(entry.fileStates)) {
+					claudeCharsByFile[path] = state.claudeContribution;
+				}
+				break;
+			}
 			case 'user': {
 				if (!firstTimestamp) firstTimestamp = entry.timestamp;
 				lastTimestamp = entry.timestamp;
@@ -297,6 +307,7 @@ export async function aggregateSession(
 		agentSetting,
 		summary,
 		taskSummary,
+		claudeCharsByFile,
 		firstTimestamp,
 		lastTimestamp,
 		durationMs,
