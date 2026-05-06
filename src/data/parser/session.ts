@@ -62,9 +62,12 @@ async function addAgentFile(
 /**
  * Parses a complete Claude Code session — main transcript + all subagent files.
  *
- * This is the recommended entry point when working with a known session on disk.
- * It correctly populates `subagentTurns` from separate subagent JSONL files
- * (CC ≥ 2.1.2) in addition to any inline subagent turns in the main transcript.
+ * **Use this when you have a session on disk and want full subagent data.**
+ * Prefer {@link aggregateSession} only when you already have a raw `AsyncIterable<SessionEntry>`
+ * (e.g. from a custom stream or test fixture).
+ *
+ * Reads the main JSONL file and scans `<sessionId>/subagents/` for per-agent files
+ * written by CC ≥ 2.1.2. `subagentTurns` is correctly populated from both sources.
  *
  * @param projectDir Absolute path to the project directory under `~/.claude/projects/<slug>/`
  * @param sessionId  UUID of the session (without `.jsonl` extension)
@@ -75,8 +78,8 @@ async function addAgentFile(
  *   '/Users/me/.claude/projects/-Users-me-my-project',
  *   'e2b491ed-ec11-4fc3-b9ff-90a11d0a8c0c'
  * );
- * console.log(session.gitBranch);
- * console.log(session.subagentTurns.size); // populated from separate files
+ * console.log(session.tokens.input);       // total input tokens
+ * console.log(session.subagentTurns.size); // number of distinct subagents
  * ```
  */
 export async function parseSession(projectDir: string, sessionId: string): Promise<ParsedSession> {

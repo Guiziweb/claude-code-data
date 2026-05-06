@@ -1,0 +1,10 @@
+{"type":"user","uuid":"00000000-0000-0000-0000-000000000001","parentUuid":null,"isSidechain":false,"sessionId":"00000000-0000-0000-0000-000000000aaa","timestamp":"2026-05-01T10:00:00.000Z","version":"2.1.0","cwd":"/project","userType":"external","message":{"role":"user","content":[{"type":"text","text":"Hello"}]}}
+{"type":"tag","sessionId":"00000000-0000-0000-0000-000000000aaa","tag":"release-prep"}
+{"type":"agent-name","sessionId":"00000000-0000-0000-0000-000000000aaa","agentName":"my-agent"}
+{"type":"agent-color","sessionId":"00000000-0000-0000-0000-000000000aaa","agentColor":"blue"}
+{"type":"agent-setting","sessionId":"00000000-0000-0000-0000-000000000aaa","agentSetting":"model=claude-opus-4-7"}
+{"type":"mode","sessionId":"00000000-0000-0000-0000-000000000aaa","mode":"coordinator"}
+{"type":"permission-mode","sessionId":"00000000-0000-0000-0000-000000000aaa","permissionMode":"bypassPermissions"}
+{"type":"summary","leafUuid":"00000000-0000-0000-0000-000000000001","summary":"Auto-compact summary text"}
+{"type":"task-summary","sessionId":"00000000-0000-0000-0000-000000000aaa","summary":"Currently parsing events","timestamp":"2026-05-01T10:00:01.000Z"}
+{"type":"worktree-state","sessionId":"00000000-0000-0000-0000-000000000aaa","worktreeSession":{"originalCwd":"/project","worktreePath":"/tmp/wt","worktreeName":"wt","worktreeBranch":"feat/my-feature","sessionId":"00000000-0000-0000-0000-000000000aaa"}}
