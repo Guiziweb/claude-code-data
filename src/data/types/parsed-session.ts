@@ -1,31 +1,46 @@
 import type { EntryV01 } from './jsonl-events';
 
+/** A single user or assistant message in a session transcript. */
 export type Turn = Extract<EntryV01, { type: 'user' | 'assistant' }>;
 
+/** Result of {@link aggregateSession} — all data extracted from a single session file. */
 export type ParsedSession = {
 	sessionId: string | undefined;
 
-	// Meta events (last-wins)
+	/** User-defined title set via `/title`. Wins over all other title sources. */
 	customTitle: string | undefined;
+	/** AI-generated title. Fallback after `customTitle`. */
 	aiTitle: string | undefined;
+	/** Last user prompt captured by Claude Code at session end. */
 	lastPrompt: string | undefined;
+	/** GitHub PR number linked to this session. */
 	prNumber: number | undefined;
+	/** Full PR URL as written by Claude Code. Never reconstructed from `prRepository`. */
 	prUrl: string | undefined;
+	/** Repository in `owner/repo` form. */
 	prRepository: string | undefined;
+	/** Worktree path if the session ran inside a `claude --worktree`. `null` = exited the worktree. */
 	worktreePath: string | null | undefined;
 
-	// Derived from transcript
-	// Raw text of the first main-transcript user message that has non-empty text content.
-	// Skips: isMeta, isCompactSummary, subagent messages (agentId set), tool_result-only.
-	// Not filtered for slash commands — differs from CC's extractFirstPrompt which strips
-	// builtin commands. Consumers should apply their own display logic.
+	/**
+	 * Raw text of the first main-transcript user message with non-empty text content.
+	 * Skips: `isMeta`, `isCompactSummary`, subagent messages, tool_result-only entries.
+	 * Not filtered for slash commands — apply your own display logic if needed.
+	 */
 	firstUserText: string | undefined;
+	/** Model used in the last assistant turn. Excludes `<synthetic>` sentinel. */
 	lastModel: string | undefined;
+	/** Git branch at session end (last-wins, mirrors Claude Code convention). */
 	gitBranch: string | undefined;
+	/** ISO timestamp of the first entry. */
 	firstTimestamp: string | undefined;
+	/** ISO timestamp of the last entry. */
 	lastTimestamp: string | undefined;
+	/** Wall-clock duration in milliseconds (`lastTimestamp - firstTimestamp`). */
 	durationMs: number;
 
+	/** All main-transcript turns (user + assistant), in order. Deduplicated after `/resume`. */
 	turns: Turn[];
+	/** Subagent turns keyed by `agentId`. Populated from inline turns in the main file (legacy). */
 	subagentTurns: Map<string, Turn[]>;
 };

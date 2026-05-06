@@ -7,7 +7,7 @@
 	},
 	"files": {
 		"ignoreUnknown": true,
-		"includes": ["**", "!dist", "!build", "!coverage", "!node_modules", "!schema.graphql"]
+		"includes": ["**", "!dist", "!build", "!coverage", "!node_modules", "!docs", "!poc"]
 	},
 	"formatter": {
 		"enabled": true,
