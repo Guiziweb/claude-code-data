@@ -1,0 +1,1 @@
+{"type":"user","uuid":"00000000-0000-0000-0000-000000000006","parentUuid":null,"isSidechain":true,"sessionId":"00000000-0000-0000-0000-000000000aaa","timestamp":"2026-05-01T10:00:05.000Z","version":"2.1.2","cwd":"/project","userType":"external","agentId":"nested001","message":{"role":"user","content":[{"type":"text","text":"Nested subagent task"}]}}

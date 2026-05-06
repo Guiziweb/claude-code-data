@@ -1,10 +1,14 @@
 import type { SessionEntry } from '../types/jsonl-events';
 import { extractTextFromContent, getMessageId, getMessageModel } from '../types/message-helpers';
-import type { ParsedSession, Turn } from '../types/parsed-session';
+import type { MessageEntry, ParsedSession } from '../types/parsed-session';
 
 const SYNTHETIC_MODEL = '<synthetic>';
 
-function routeTurn(entry: Turn, turns: Turn[], subagentTurns: Map<string, Turn[]>): void {
+function routeTurn(
+	entry: MessageEntry,
+	turns: MessageEntry[],
+	subagentTurns: Map<string, MessageEntry[]>
+): void {
 	if (!entry.agentId) {
 		turns.push(entry);
 	} else {
@@ -49,8 +53,8 @@ export async function aggregateSession(
 	let gitBranch: string | undefined;
 	let firstTimestamp: string | undefined;
 	let lastTimestamp: string | undefined;
-	const turns: Turn[] = [];
-	const subagentTurns = new Map<string, Turn[]>();
+	const turns: MessageEntry[] = [];
+	const subagentTurns = new Map<string, MessageEntry[]>();
 	// Dedup assistant entries by messageId+requestId — CC replays them after /resume.
 	const seenAssistant = new Set<string>();
 
