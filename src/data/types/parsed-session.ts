@@ -60,12 +60,15 @@ export type ParsedSession = {
 	worktreePath: string | null | undefined;
 
 	/**
-	 * Raw text of the first human user message in the main transcript.
-	 * Skips entries that are purely tool results, CC system messages (`isMeta`),
-	 * auto-compact summaries (`isCompactSummary`), and subagent turns.
-	 * Not filtered for slash commands — apply your own display logic if needed.
+	 * First meaningful user prompt, extracted with CC-exact logic
+	 * (mirrors `extractFirstPromptFromHead` from `sessionStoragePortable.ts`):
+	 * - `<bash-input>cmd</bash-input>` → `! cmd`
+	 * - Skips XML-like prefixes (`<tag>`), `[Request interrupted...]`, tool results,
+	 *   `isMeta`, `isCompactSummary`, and subagent turns
+	 * - Truncated to 200 chars + `…`
+	 * - Falls back to the first `<command-name>` value (e.g. `/voice` → `"voice"`)
 	 */
-	firstUserText: string | undefined;
+	firstPrompt: string | undefined;
 	/**
 	 * Model used in the last assistant turn.
 	 * CC uses the sentinel string `'<synthetic>'` for internally-injected messages
