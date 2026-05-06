@@ -1,7 +1,7 @@
 import type { SessionEntry } from './jsonl-events';
 
 /** A single user or assistant message in a session transcript. */
-export type Turn = Extract<SessionEntry, { type: 'user' | 'assistant' }>;
+export type MessageEntry = Extract<SessionEntry, { type: 'user' | 'assistant' }>;
 
 /** Result of {@link aggregateSession} — all data extracted from a single session file. */
 export type ParsedSession = {
@@ -40,7 +40,11 @@ export type ParsedSession = {
 	durationMs: number;
 
 	/** All main-transcript turns (user + assistant), in order. Deduplicated after `/resume`. */
-	turns: Turn[];
-	/** Subagent turns keyed by `agentId`. Populated from inline turns in the main file (legacy). */
-	subagentTurns: Map<string, Turn[]>;
+	turns: MessageEntry[];
+	/**
+	 * Subagent turns keyed by `agentId`.
+	 * When using {@link parseSession}, populated from separate subagent JSONL files (CC ≥ 2.1.2).
+	 * When using {@link aggregateSession} directly, populated from inline turns in the main file only.
+	 */
+	subagentTurns: Map<string, MessageEntry[]>;
 };

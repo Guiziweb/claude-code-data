@@ -1,4 +1,5 @@
 export { parseJsonlStream } from './data/parser/jsonl';
+export { parseSession } from './data/parser/session';
 export { aggregateSession } from './data/parser/session-meta';
 export type {
 	ContentBlock,
@@ -21,4 +22,4 @@ export type {
 	UserEntry,
 	WorktreeStateEntry,
 } from './data/types/jsonl-events';
-export type { ParsedSession, Turn } from './data/types/parsed-session';
+export type { MessageEntry, ParsedSession } from './data/types/parsed-session';
