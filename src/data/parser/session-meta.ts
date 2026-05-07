@@ -1,11 +1,6 @@
 import type { SessionEntry } from '../types/jsonl-events';
 import { getMessageId, getMessageModel } from '../types/message-helpers';
-import type {
-	ContextTurn,
-	MessageEntry,
-	ParsedSession,
-	TokenBuckets,
-} from '../types/parsed-session';
+import type { ContextTurn, ParsedSession, TokenBuckets } from '../types/parsed-session';
 
 const SYNTHETIC_MODEL = '<synthetic>';
 
@@ -84,32 +79,18 @@ function isHumanMessage(content: unknown): boolean {
 	);
 }
 
-function routeTurn(
-	entry: MessageEntry,
-	turns: MessageEntry[],
-	subagentTurns: Map<string, MessageEntry[]>
-): void {
-	// Mirrors CC sessionStorage.ts: isAgentSidechain = entry.isSidechain && entry.agentId !== undefined
-	if (entry.isSidechain && entry.agentId !== undefined) {
-		const list = subagentTurns.get(entry.agentId) ?? [];
-		list.push(entry);
-		subagentTurns.set(entry.agentId, list);
-	} else {
-		turns.push(entry);
-	}
-}
-
 /**
  * Aggregates a stream of JSONL entries into a single {@link ParsedSession}.
  *
- * Single-pass — reads each entry once. Handles:
+ * Single-pass — reads each entry once. Computes only metadata + aggregate
+ * counters; the per-turn entries are not retained, keeping memory constant
+ * regardless of the source's length. Handles:
  * - Meta events (last-wins): `customTitle`, `aiTitle`, `gitBranch`, `prNumber`, etc.
  * - Analytics: tokens (deduplicated), tool/skill usage, hourOfDay, message counts
  * - Deduplication of assistant entries replayed after `/resume` (on `messageId+requestId`;
  *   entries missing either field are not deduplicated — they are counted as-is).
  *   `/resume` = the Claude Code command that continues a previous session; CC replays
  *   all previous assistant messages verbatim into the new file to restore context.
- * - Routing of subagent turns into `subagentTurns` by `agentId`
  *
  * Pair with {@link parseJsonlStream} to go from file path to session:
  *
@@ -118,7 +99,6 @@ function routeTurn(
  * const session = await aggregateSession(parseJsonlStream('/path/to/session.jsonl'));
  * console.log(session.gitBranch);    // 'feat/my-feature'
  * console.log(session.tokens.input); // total input tokens
- * console.log(session.turns);        // MessageEntry[]
  * ```
  */
 export async function aggregateSession(
@@ -161,8 +141,6 @@ export async function aggregateSession(
 	const skillUsage: Record<string, number> = {};
 	const hourOfDay: number[] = new Array(HOURS_IN_DAY).fill(0);
 
-	const turns: MessageEntry[] = [];
-	const subagentTurns = new Map<string, MessageEntry[]>();
 	// Dedup assistant entries by messageId+requestId — CC replays them after /resume.
 	const seenAssistant = new Set<string>();
 	// Dedup tool_use by id — CC can stream one call across multiple entries.
@@ -245,7 +223,6 @@ export async function aggregateSession(
 						}
 					}
 				}
-				routeTurn(entry, turns, subagentTurns);
 				break;
 			}
 			case 'assistant': {
@@ -321,7 +298,6 @@ export async function aggregateSession(
 					}
 				}
 
-				routeTurn(entry, turns, subagentTurns);
 				break;
 			}
 			case 'system':
@@ -377,7 +353,5 @@ export async function aggregateSession(
 		toolUsage,
 		skillUsage,
 		hourOfDay,
-		turns,
-		subagentTurns,
 	};
 }
