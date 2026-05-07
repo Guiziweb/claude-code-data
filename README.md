@@ -6,54 +6,47 @@
 [![coverage: 100%](https://img.shields.io/badge/coverage-100%25-brightgreen)](#)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
-Parses `~/.claude/projects/**/*.jsonl` into typed TypeScript. Handles all CC event variants, deduplication after `/resume`, subagent routing, and analytics extraction — all verified against the CC source.
+Get clean, typed analytics from your Claude Code sessions — tokens used, git branches, tools called, full transcripts. Reads the JSONL files Claude Code stores under `~/.claude/projects/`.
 
 ```ts
-import { parseSession } from 'claude-data-api';
+import { parseAllSessions } from 'claude-data-api';
 
-const session = await parseSession(
-  '/Users/me/.claude/projects/-Users-me-my-project',
-  'e2b491ed-ec11-4fc3-b9ff-90a11d0a8c0c'
+const sessions = await parseAllSessions(
+  '/Users/me/.claude/projects/-Users-me-my-project'
 );
 
-session.firstPrompt        // 'Fix the parser bug'
-session.tokens.input       // 7231  (deduplicated — /resume replays counted once)
-session.toolUsage.Bash     // 276
-session.subagentTurns.size // 3
+for (const s of sessions) {
+  const tokens = s.tokens.input + s.tokens.output;
+  console.log(`[${s.gitBranch}] ${s.firstPrompt} — ${tokens.toLocaleString()} tokens`);
+}
+// [feat/auth-refactor] Add JWT refresh token rotation — 87,432 tokens
+// [fix/payment-bug]    Stripe webhook fails on retry  — 23,104 tokens
+// [main]               How do I set up the test suite — 12,301 tokens
 ```
 
 ## Why
 
-Claude Code stores every session as a JSONL file under `~/.claude/projects/`. Reading them correctly means handling versioned event variants, deduplicating entries replayed after `/resume`, routing subagent turns to separate files, and extracting analytics from raw usage fields.
+Claude Code stores conversations as JSONL files. Reading them correctly has many edge cases — different event types, subagent files in separate folders, transcripts replayed after `/resume` that double-count tokens.
 
-This library does that once, correctly, verified against the CC source — so you can build analytics dashboards, session browsers, or scripts without reimplementing the parser.
+This library handles all of that, so you can build analytics dashboards, session browsers, or scripts without reimplementing the parser.
+
+## Data model
+
+```
+~/.claude/projects/
+  └── <project-slug>/                       ← a project = a working directory
+      └── <session-id>.jsonl                ← a session = one conversation
+      └── <session-id>/subagents/agent-*.jsonl  ← subagents (CC ≥ 2.1.2)
+```
 
 ## API
 
 ```ts
-// Full session — main transcript + subagent files
-const session = await parseSession(projectDir, sessionId);
+parseAllSessions(projectDir)           // ParsedSession[]
+parseSession(projectDir, sessionId)    // ParsedSession (with subagents)
 ```
 
-```ts
-// Stream any AsyncIterable<SessionEntry>
-const session = await aggregateSession(parseJsonlStream('/path/to/file.jsonl'));
-```
-
-```ts
-// Parse a single JSONL entry
-const entry = safeParseEntry(rawObject); // null for unknown types
-```
-
-`ParsedSession` includes: titles, git branch, PR link, token usage per model, tool/skill counts, message counts, context window fill, hourly activity, and all transcript turns.
-
-Full type docs: [guiziweb.github.io/claude-data-api](https://guiziweb.github.io/claude-data-api)
-
-## Stack
-
-- [Bun](https://bun.sh) — runtime, test runner
-- [Valibot](https://valibot.dev) — schema validation
-- [Biome](https://biomejs.dev) — lint + format
+See [`ParsedSession`](https://guiziweb.github.io/claude-data-api/types/ParsedSession.html) for all available fields.
 
 ## License
 
