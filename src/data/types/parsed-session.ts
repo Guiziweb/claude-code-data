@@ -122,6 +122,12 @@ export type ParsedSession = {
 	lastTimestamp: string | undefined;
 	/** Wall-clock duration in milliseconds (`lastTimestamp - firstTimestamp`). */
 	durationMs: number;
+	/**
+	 * API duration in milliseconds — sum of `system/turn_duration.durationMs` events.
+	 * The time Claude spent processing requests, excluding user idle time.
+	 * Always less than {@link ParsedSession.durationMs} (wall-clock).
+	 */
+	apiDurationMs: number;
 
 	/**
 	 * Cumulative token usage for the session.

@@ -206,6 +206,8 @@ export type SystemEntry = {
 	uuid?: string;
 	sessionId?: string;
 	timestamp?: string;
+	/** API duration in milliseconds — present on `subtype: 'turn_duration'` entries. */
+	durationMs?: number;
 	[key: string]: unknown;
 };
 

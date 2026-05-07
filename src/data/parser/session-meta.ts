@@ -149,6 +149,7 @@ export async function aggregateSession(
 	let taskSummary: string | undefined;
 	let firstTimestamp: string | undefined;
 	let lastTimestamp: string | undefined;
+	let apiDurationMs = 0;
 
 	const tokens = emptyBuckets();
 	const tokensByModel: Record<string, TokenBuckets> = {};
@@ -323,8 +324,11 @@ export async function aggregateSession(
 				routeTurn(entry, turns, subagentTurns);
 				break;
 			}
+			case 'system':
+				if (entry.subtype === 'turn_duration') apiDurationMs += entry.durationMs ?? 0;
+				break;
 			default:
-				// Internal CC events (system, attachment, file-history-snapshot,
+				// Internal CC events (attachment, file-history-snapshot,
 				// attribution-snapshot, marble-origami-*, content-replacement,
 				// queue-operation, speculation-accept) — no ParsedSession extraction.
 				break;
@@ -363,6 +367,7 @@ export async function aggregateSession(
 		firstTimestamp,
 		lastTimestamp,
 		durationMs,
+		apiDurationMs,
 		tokens,
 		tokensByModel,
 		contextByTurn,

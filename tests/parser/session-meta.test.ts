@@ -239,8 +239,14 @@ describe('aggregateSession()', () => {
 		expect(s.sessionId).toBeUndefined();
 		expect(s.turns).toHaveLength(0);
 		expect(s.durationMs).toBe(0);
+		expect(s.apiDurationMs).toBe(0);
 		expect(s.firstPrompt).toBeUndefined();
 		expect(s.lastModel).toBeUndefined();
+	});
+
+	test('apiDurationMs — sums system/turn_duration entries, ignores those missing durationMs', async () => {
+		const s = await parse('session-turn-duration.jsonl');
+		expect(s.apiDurationMs).toBe(1500);
 	});
 
 	describe('analytics (session-analytics.jsonl)', () => {
