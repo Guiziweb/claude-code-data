@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 This file is generated automatically on tagged releases from Conventional Commits.
 Until the first tagged release, only the `Unreleased` section is maintained.
 
+## [2.0.0](https://github.com/Guiziweb/claude-code-data/compare/v1.1.4...v2.0.0) (2026-05-07)
+
+
+### ⚠ BREAKING CHANGES
+
+* `parseSession`, `parseAllSessions`, `ParsedSession.turns` and `ParsedSession.subagentTurns` are removed. Migrate to `readSession` (metadata) + `readSessionTurns` / `readSubagentTurns` (streamed turns).
+
+### Code Refactoring
+
+* streaming API redesign ([#61](https://github.com/Guiziweb/claude-code-data/issues/61)) ([8ae42be](https://github.com/Guiziweb/claude-code-data/commit/8ae42be0ce3498938ad78752a2990ee4e436984b))
+
 ## [1.1.4](https://github.com/Guiziweb/claude-code-data/compare/v1.1.3...v1.1.4) (2026-05-07)
 
 
