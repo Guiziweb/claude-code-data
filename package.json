@@ -19,10 +19,30 @@
 		"sessions",
 		"parser"
 	],
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"main": "./dist/index.mjs",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.mts",
+	"files": [
+		"dist"
+	],
+	"publishConfig": {
+		"access": "public",
+		"exports": {
+			".": {
+				"types": "./dist/index.d.mts",
+				"default": "./dist/index.mjs"
+			}
+		}
+	},
 	"engines": {
 		"bun": ">=1.3.0"
 	},
 	"scripts": {
+		"build": "tsdown",
+		"prepack": "bun run build",
 		"test": "bun test",
 		"typecheck": "tsc --noEmit",
 		"lint": "biome lint .",
@@ -32,6 +52,7 @@
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.14",
 		"@types/bun": "^1.3.13",
+		"tsdown": "^0.21.10",
 		"typedoc": "^0.28.19",
 		"typescript": "^6.0.3"
 	},
