@@ -2,11 +2,19 @@
 
 > TypeScript parser for Claude Code's local session data.
 
-[![status: beta](https://img.shields.io/badge/status-beta-yellow)](#)
+[![npm](https://img.shields.io/npm/v/claude-code-data.svg)](https://www.npmjs.com/package/claude-code-data)
 [![coverage: 100%](https://img.shields.io/badge/coverage-100%25-brightgreen)](#)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
 Get clean, typed analytics from your Claude Code sessions — tokens used, git branches, tools called, full transcripts. Reads the JSONL files Claude Code stores under `~/.claude/projects/`.
+
+## Install
+
+```bash
+npm install claude-code-data
+```
+
+## Usage
 
 ```ts
 import { parseAllSessions } from 'claude-code-data';
