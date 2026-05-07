@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 This file is generated automatically on tagged releases from Conventional Commits.
 Until the first tagged release, only the `Unreleased` section is maintained.
 
+## [1.1.0](https://github.com/Guiziweb/claude-code-data/compare/v1.0.0...v1.1.0) (2026-05-07)
+
+
+### Features
+
+* publish on npm + switch to OIDC trusted publishing ([#51](https://github.com/Guiziweb/claude-code-data/issues/51)) ([4eef7ef](https://github.com/Guiziweb/claude-code-data/commit/4eef7ef25b33e168ddd692f26f87ef0fc4508c24))
+
 ## 1.0.0 (2026-05-07)
 
 
