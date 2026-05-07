@@ -5,13 +5,13 @@
 	"type": "module",
 	"license": "MIT",
 	"author": "guiziweb",
-	"homepage": "https://github.com/guiziweb/claude-code-data",
+	"homepage": "https://github.com/Guiziweb/claude-code-data",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/guiziweb/claude-code-data.git"
+		"url": "git+https://github.com/Guiziweb/claude-code-data.git"
 	},
 	"bugs": {
-		"url": "https://github.com/guiziweb/claude-code-data/issues"
+		"url": "https://github.com/Guiziweb/claude-code-data/issues"
 	},
 	"keywords": [
 		"claude-code",
