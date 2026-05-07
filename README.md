@@ -1,4 +1,4 @@
-# claude-data-api
+# claude-code-data
 
 > TypeScript parser for Claude Code's local session data.
 
@@ -9,7 +9,7 @@
 Get clean, typed analytics from your Claude Code sessions — tokens used, git branches, tools called, full transcripts. Reads the JSONL files Claude Code stores under `~/.claude/projects/`.
 
 ```ts
-import { parseAllSessions } from 'claude-data-api';
+import { parseAllSessions } from 'claude-code-data';
 
 const sessions = await parseAllSessions(
   '/Users/me/.claude/projects/-Users-me-my-project'
@@ -46,7 +46,7 @@ parseAllSessions(projectDir)           // ParsedSession[]
 parseSession(projectDir, sessionId)    // ParsedSession (with subagents)
 ```
 
-See [`ParsedSession`](https://guiziweb.github.io/claude-data-api/types/ParsedSession.html) for all available fields.
+See [`ParsedSession`](https://guiziweb.github.io/claude-code-data/types/ParsedSession.html) for all available fields.
 
 ## License
 
