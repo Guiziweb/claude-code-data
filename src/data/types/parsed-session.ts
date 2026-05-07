@@ -154,14 +154,22 @@ export type ParsedSession = {
 
 	/**
 	 * Number of human user messages in the main transcript.
-	 * Excludes: tool_result-only entries, `isMeta`, `isCompactSummary`, and subagent turns.
-	 * Mirrors CC's `isHumanMessage` filter from `insights.ts`.
+	 *
+	 * Stricter than CC's `userMessageCount` (which only filters tool-result-only entries
+	 * via `isHumanMessage`): also excludes `isMeta`, `isCompactSummary`, and subagent turns
+	 * (`isSidechain && agentId !== undefined`). The intent is "actual user typing in the
+	 * main thread", not "every user-typed entry CC writes to disk".
 	 */
 	userMessageCount: number;
 	/**
-	 * Number of unique assistant API calls. Deduplicated on `messageId+requestId` —
-	 * `/resume` replays the previous transcript verbatim, so those entries are not counted again.
-	 * Excludes `<synthetic>` sentinel messages.
+	 * Number of unique assistant API calls.
+	 *
+	 * Stricter than CC's raw count: deduplicated on `messageId+requestId` (so `/resume`
+	 * replays of previous assistant entries are counted once) and excludes `<synthetic>`
+	 * sentinel messages (compact summaries injected internally by CC).
+	 *
+	 * Like CC's own metric, **includes** subagent assistant turns — there is no `isSidechain`
+	 * filter on the assistant side, mirroring the asymmetry with {@link ParsedSession.userMessageCount}.
 	 */
 	assistantMessageCount: number;
 
@@ -197,14 +205,4 @@ export type ParsedSession = {
 	 * never summed across snapshots (which would cause quadratic count inflation).
 	 */
 	claudeCharsByFile: Record<string, number> | undefined;
-
-	/** All main-transcript turns (user + assistant), in order. Deduplicated after `/resume`. */
-	turns: MessageEntry[];
-	/**
-	 * Subagent turns keyed by `agentId`. Populated from separate subagent JSONL files (CC ≥ 2.1.2).
-	 *
-	 * Routing mirrors CC `sessionStorage.ts`: an entry is classified as a subagent turn when
-	 * `isSidechain === true && agentId !== undefined` (both conditions required).
-	 */
-	subagentTurns: Map<string, MessageEntry[]>;
 };

@@ -6,64 +6,33 @@ import { parseJsonlStream } from './jsonl';
 import { aggregateSession } from './session-meta';
 
 /**
- * Reads all subagent JSONL files for a session and returns a map of
- * `agentId → MessageEntry[]`.
+ * Reads session IDs from a project directory.
  *
- * Mirrors CC's `loadAllSubagentTranscriptsFromDisk` but scans recursively to
- * also cover nested layouts (e.g. `subagents/workflows/<runId>/agent-<id>.jsonl`).
- * Filename format: `agent-<agentId>.jsonl` — verified in CC source (sessionStorage.ts).
+ * Scans top-level `*.jsonl` files and returns their UUIDs (filename without
+ * extension). Excludes legacy `agent-*.jsonl` inline subagent files (CC < 2.1.2).
+ * Returns an empty array if the directory does not exist.
+ *
+ * Pair with {@link readSession} or {@link readSessionTurns} to walk a project.
+ *
+ * @param projectDir Absolute path to the project directory under `~/.claude/projects/<slug>/`
+ * @returns Array of session UUIDs (without `.jsonl` extension), in directory order.
+ *
+ * @example
+ * ```ts
+ * const dir = '/Users/me/.claude/projects/-Users-me-my-project';
+ *
+ * // Sequential — memory-bounded, one session at a time
+ * for (const id of await readSessionIds(dir)) {
+ *   const session = await readSession(dir, id);
+ *   // process and discard
+ * }
+ *
+ * // Parallel — caller picks the strategy (Promise.all, p-limit, …)
+ * const ids = await readSessionIds(dir);
+ * const sessions = await Promise.all(ids.map((id) => readSession(dir, id)));
+ * ```
  */
-async function readSubagentTurns(
-	projectDir: string,
-	sessionId: string
-): Promise<Map<string, MessageEntry[]>> {
-	const result = new Map<string, MessageEntry[]>();
-	await scanSubagentsDir(join(projectDir, sessionId, 'subagents'), result);
-	return result;
-}
-
-async function scanSubagentsDir(dir: string, result: Map<string, MessageEntry[]>): Promise<void> {
-	let entries: Dirent[];
-	try {
-		entries = await readdir(dir, { withFileTypes: true });
-	} catch {
-		return;
-	}
-
-	for (const entry of entries) {
-		if (entry.isFile() && entry.name.startsWith('agent-') && entry.name.endsWith('.jsonl')) {
-			// Mirrors CC: name.slice('agent-'.length, -'.jsonl'.length)
-			const agentId = entry.name.slice('agent-'.length, -'.jsonl'.length);
-			await addAgentFile(join(dir, entry.name), agentId, result);
-		} else if (entry.isDirectory()) {
-			await scanSubagentsDir(join(dir, entry.name), result);
-		}
-	}
-}
-
-async function addAgentFile(
-	filePath: string,
-	agentId: string,
-	result: Map<string, MessageEntry[]>
-): Promise<void> {
-	const turns: MessageEntry[] = [];
-	for await (const entry of parseJsonlStream(filePath)) {
-		if (entry.type === 'user' || entry.type === 'assistant') {
-			turns.push(entry);
-		}
-	}
-
-	if (turns.length > 0) {
-		const existing = result.get(agentId) ?? [];
-		result.set(agentId, [...existing, ...turns]);
-	}
-}
-
-/**
- * Lists session IDs in a project dir — top-level `*.jsonl` files, excluding
- * legacy `agent-*.jsonl` inline subagent files (CC < 2.1.2).
- */
-async function listSessionIds(projectDir: string): Promise<string[]> {
+export async function readSessionIds(projectDir: string): Promise<string[]> {
 	let entries: Dirent[];
 	try {
 		entries = await readdir(projectDir, { withFileTypes: true });
@@ -76,54 +45,119 @@ async function listSessionIds(projectDir: string): Promise<string[]> {
 }
 
 /**
- * Parses every session in a project directory.
+ * Reads and parses one Claude Code session into its aggregate metadata.
  *
- * Discovers all session files and parses each one (including its subagent
- * files) in parallel. Returned `ParsedSession[]` is the foundation for
- * cross-session analytics — group by `gitBranch`, `firstTimestamp`, etc.
+ * Streams the main JSONL file and computes counters and last-wins fields
+ * (tokens, gitBranch, primaryModel, etc.) without retaining the per-turn
+ * entries. Memory usage stays constant regardless of the file size.
  *
- * @param projectDir Absolute path to the project directory under `~/.claude/projects/<slug>/`
- * @returns Array of parsed sessions, one per session file found. Empty if the directory does not exist.
- *
- * @example
- * ```ts
- * const sessions = await parseAllSessions('/Users/me/.claude/projects/-Users-me-my-project');
- * const byBranch = Map.groupBy(sessions, (s) => s.gitBranch ?? 'unknown');
- * ```
- */
-export async function parseAllSessions(projectDir: string): Promise<ParsedSession[]> {
-	const ids = await listSessionIds(projectDir);
-	return Promise.all(ids.map((id) => parseSession(projectDir, id)));
-}
-
-/**
- * Parses one Claude Code session — main transcript + all its subagent files.
- *
- * Reads the main JSONL file and scans `<sessionId>/subagents/` for per-agent
- * files written by CC ≥ 2.1.2. `subagentTurns` is populated from both sources.
+ * Pair with {@link readSessionTurns} when you need the message stream.
  *
  * @param projectDir Absolute path to the project directory under `~/.claude/projects/<slug>/`
  * @param sessionId  UUID of the session (without `.jsonl` extension)
  *
  * @example
  * ```ts
- * const session = await parseSession(
+ * const session = await readSession(
  *   '/Users/me/.claude/projects/-Users-me-my-project',
  *   'e2b491ed-ec11-4fc3-b9ff-90a11d0a8c0c'
  * );
- * console.log(session.tokens.input);       // total input tokens
- * console.log(session.subagentTurns.size); // number of distinct subagents
+ * console.log(session.tokens.input);  // total input tokens
+ * console.log(session.gitBranch);     // 'feat/my-feature'
  * ```
  */
-export async function parseSession(projectDir: string, sessionId: string): Promise<ParsedSession> {
+export async function readSession(projectDir: string, sessionId: string): Promise<ParsedSession> {
 	const mainFile = join(projectDir, `${sessionId}.jsonl`);
-	const session = await aggregateSession(parseJsonlStream(mainFile));
+	return aggregateSession(parseJsonlStream(mainFile));
+}
 
-	const fromFiles = await readSubagentTurns(projectDir, sessionId);
-	for (const [agentId, turns] of fromFiles) {
-		const existing = session.subagentTurns.get(agentId) ?? [];
-		session.subagentTurns.set(agentId, [...existing, ...turns]);
+/**
+ * Streams the main-transcript turns of a session, one at a time.
+ *
+ * Yields user and assistant entries from the main JSONL file, in chronological
+ * order, skipping subagent turns (`isSidechain && agentId !== undefined`).
+ * Memory stays bounded — the consumer can break, filter, or accumulate at will.
+ *
+ * @param projectDir Absolute path to the project directory under `~/.claude/projects/<slug>/`
+ * @param sessionId  UUID of the session (without `.jsonl` extension)
+ *
+ * @example
+ * ```ts
+ * // Render a transcript without holding all turns in memory
+ * for await (const turn of readSessionTurns(dir, id)) {
+ *   render(turn);
+ * }
+ * ```
+ */
+export async function* readSessionTurns(
+	projectDir: string,
+	sessionId: string
+): AsyncGenerator<MessageEntry> {
+	const mainFile = join(projectDir, `${sessionId}.jsonl`);
+	for await (const entry of parseJsonlStream(mainFile)) {
+		if (entry.type !== 'user' && entry.type !== 'assistant') continue;
+		// Mirrors CC sessionStorage.ts: skip subagent turns from the main transcript stream.
+		if (entry.isSidechain && entry.agentId !== undefined) continue;
+		yield entry;
 	}
+}
 
-	return session;
+/**
+ * Streams the subagent turns spawned by a session, one at a time.
+ *
+ * Recursively scans `<sessionId>/subagents/agent-<agentId>.jsonl` files (CC ≥ 2.1.2),
+ * including nested layouts (e.g. `subagents/workflows/<runId>/agent-<id>.jsonl`),
+ * and yields each user/assistant turn tagged with its `agentId`. Memory stays
+ * bounded — the consumer can group, filter, or process incrementally.
+ *
+ * Yields nothing if the session has no `subagents/` directory.
+ *
+ * @param projectDir Absolute path to the project directory under `~/.claude/projects/<slug>/`
+ * @param sessionId  UUID of the parent session (without `.jsonl` extension)
+ *
+ * @example
+ * ```ts
+ * // Group by agent — typical use case
+ * const byAgent = new Map<string, MessageEntry[]>();
+ * for await (const { agentId, turn } of readSubagentTurns(dir, id)) {
+ *   if (!byAgent.has(agentId)) byAgent.set(agentId, []);
+ *   byAgent.get(agentId)!.push(turn);
+ * }
+ * ```
+ */
+export async function* readSubagentTurns(
+	projectDir: string,
+	sessionId: string
+): AsyncGenerator<{ agentId: string; turn: MessageEntry }> {
+	const root = join(projectDir, sessionId, 'subagents');
+	yield* scanSubagents(root, 0);
+}
+
+// Caps recursive descent — protects against symlink loops or pathological layouts.
+// CC's known nested layout is `subagents/workflows/<runId>/agent-*.jsonl` (depth 2).
+const SUBAGENT_SCAN_MAX_DEPTH = 8;
+
+async function* scanSubagents(
+	dir: string,
+	depth: number
+): AsyncGenerator<{ agentId: string; turn: MessageEntry }> {
+	if (depth > SUBAGENT_SCAN_MAX_DEPTH) return;
+
+	let entries: Dirent[];
+	try {
+		entries = await readdir(dir, { withFileTypes: true });
+	} catch {
+		return;
+	}
+	for (const entry of entries) {
+		if (entry.isFile() && entry.name.startsWith('agent-') && entry.name.endsWith('.jsonl')) {
+			// Mirrors CC: name.slice('agent-'.length, -'.jsonl'.length)
+			const agentId = entry.name.slice('agent-'.length, -'.jsonl'.length);
+			for await (const e of parseJsonlStream(join(dir, entry.name))) {
+				if (e.type === 'user' || e.type === 'assistant') yield { agentId, turn: e };
+			}
+		} else if (entry.isDirectory()) {
+			yield* scanSubagents(join(dir, entry.name), depth + 1);
+		}
+	}
 }

@@ -44,7 +44,8 @@
 		"typecheck": "tsc --noEmit",
 		"lint": "biome lint .",
 		"format": "biome format --write .",
-		"check": "biome check ."
+		"check": "biome check .",
+		"ci": "bun run check && bun run typecheck && bun test --coverage && bunx typedoc --entryPoints src/index.ts --out docs --treatWarningsAsErrors"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.14",

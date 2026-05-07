@@ -10,14 +10,14 @@ async function parse(file: string) {
 }
 
 describe('aggregateSession()', () => {
-	test('minimal session — timestamps, duration, turns', async () => {
+	test('minimal session — timestamps, duration, message counts', async () => {
 		const s = await parse('session-minimal.jsonl');
 		expect(s.sessionId).toBe('00000000-0000-0000-0000-000000000aaa');
 		expect(s.firstTimestamp).toBe('2026-05-01T10:00:00.000Z');
 		expect(s.lastTimestamp).toBe('2026-05-01T10:00:01.000Z');
 		expect(s.durationMs).toBe(1000);
-		expect(s.turns).toHaveLength(2);
-		expect(s.subagentTurns.size).toBe(0);
+		expect(s.userMessageCount).toBe(1);
+		expect(s.assistantMessageCount).toBe(1);
 	});
 
 	test('meta events — last-wins', async () => {
@@ -124,11 +124,12 @@ describe('aggregateSession()', () => {
 		expect(s.worktreePath).toBeUndefined();
 	});
 
-	test('subagentTurns — separated from main turns', async () => {
+	test('userMessageCount excludes subagent user turns; assistantMessageCount counts all unique assistants', async () => {
 		const s = await parse('session-subagents.jsonl');
-		expect(s.turns).toHaveLength(2);
-		expect(s.subagentTurns.size).toBe(1);
-		expect(s.subagentTurns.get('agent-abc123')).toHaveLength(2);
+		// userMessageCount mirrors CC's isHumanMessage filter — main only (1).
+		expect(s.userMessageCount).toBe(1);
+		// assistantMessageCount counts every unique assistant API call, subagents included (2).
+		expect(s.assistantMessageCount).toBe(2);
 	});
 
 	test('firstPrompt — skips tool_result-only messages', async () => {
@@ -143,7 +144,9 @@ describe('aggregateSession()', () => {
 
 	test('dedup — assistant entries replayed after /resume are counted once', async () => {
 		const s = await parse('session-resumed.jsonl');
-		expect(s.turns).toHaveLength(2); // 1 user + 1 assistant (not 3)
+		// 1 user + 1 unique assistant (the replayed assistant entry is deduped on messageId+requestId).
+		expect(s.userMessageCount).toBe(1);
+		expect(s.assistantMessageCount).toBe(1);
 	});
 
 	test('dedup — tokens counted once after /resume replay', async () => {
@@ -237,7 +240,8 @@ describe('aggregateSession()', () => {
 	test('empty session — zero values', async () => {
 		const s = await parse('does-not-exist.jsonl');
 		expect(s.sessionId).toBeUndefined();
-		expect(s.turns).toHaveLength(0);
+		expect(s.userMessageCount).toBe(0);
+		expect(s.assistantMessageCount).toBe(0);
 		expect(s.durationMs).toBe(0);
 		expect(s.apiDurationMs).toBe(0);
 		expect(s.firstPrompt).toBeUndefined();
