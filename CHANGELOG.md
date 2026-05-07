@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 This file is generated automatically on tagged releases from Conventional Commits.
 Until the first tagged release, only the `Unreleased` section is maintained.
 
+## [1.1.4](https://github.com/Guiziweb/claude-code-data/compare/v1.1.3...v1.1.4) (2026-05-07)
+
+
+### Bug Fixes
+
+* point exports directly to dist (drop publishConfig swap) ([#59](https://github.com/Guiziweb/claude-code-data/issues/59)) ([c9292aa](https://github.com/Guiziweb/claude-code-data/commit/c9292aae812926773904f2dd641fdcdfc0bb8ca5))
+
 ## [1.1.3](https://github.com/Guiziweb/claude-code-data/compare/v1.1.2...v1.1.3) (2026-05-07)
 
 
