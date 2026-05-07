@@ -1,17 +1,17 @@
 {
-	"name": "claude-data-api",
+	"name": "claude-code-data",
 	"version": "0.0.0",
 	"description": "Parser for Claude Code's local session data (~/.claude/).",
 	"type": "module",
 	"license": "MIT",
 	"author": "guiziweb",
-	"homepage": "https://github.com/guiziweb/claude-data-api",
+	"homepage": "https://github.com/guiziweb/claude-code-data",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/guiziweb/claude-data-api.git"
+		"url": "git+https://github.com/guiziweb/claude-code-data.git"
 	},
 	"bugs": {
-		"url": "https://github.com/guiziweb/claude-data-api/issues"
+		"url": "https://github.com/guiziweb/claude-code-data/issues"
 	},
 	"keywords": [
 		"claude-code",
