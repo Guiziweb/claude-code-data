@@ -1,7 +1,7 @@
-import type { SessionEntry } from './jsonl-events';
+import type { AssistantEntry, UserEntry } from './jsonl-events';
 
 /** A single user or assistant message in a session transcript. */
-export type MessageEntry = Extract<SessionEntry, { type: 'user' | 'assistant' }>;
+export type MessageEntry = UserEntry | AssistantEntry;
 
 /**
  * Token usage broken down by category.
@@ -35,7 +35,7 @@ export type ContextTurn = {
 	cacheCreation: number;
 };
 
-/** Result of {@link aggregateSession} — all data extracted from a single session file. */
+/** Aggregated data extracted from a Claude Code session. */
 export type ParsedSession = {
 	/** Session UUID. `undefined` if the file is empty or contains no entry with a `sessionId` field. */
 	sessionId: string | undefined;
@@ -201,9 +201,7 @@ export type ParsedSession = {
 	/** All main-transcript turns (user + assistant), in order. Deduplicated after `/resume`. */
 	turns: MessageEntry[];
 	/**
-	 * Subagent turns keyed by `agentId`.
-	 * When using {@link parseSession}, populated from separate subagent JSONL files (CC ≥ 2.1.2).
-	 * When using {@link aggregateSession} directly, populated from inline turns in the main file only.
+	 * Subagent turns keyed by `agentId`. Populated from separate subagent JSONL files (CC ≥ 2.1.2).
 	 *
 	 * Routing mirrors CC `sessionStorage.ts`: an entry is classified as a subagent turn when
 	 * `isSidechain === true && agentId !== undefined` (both conditions required).

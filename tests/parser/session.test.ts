@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { parseSession } from '../../src/data/parser/session';
+import { parseAllSessions, parseSession } from '../../src/data/parser/session';
 
 const PROJECT_DIR = join(import.meta.dir, '..', 'fixtures', 'synthetic', 'project-with-subagents');
 const SESSION_ID = '00000000-0000-0000-0000-000000000aaa';
@@ -33,5 +33,32 @@ describe('parseSession()', () => {
 		const s = await parseSession(PROJECT_DIR, 'does-not-exist');
 		expect(s.turns).toHaveLength(0);
 		expect(s.subagentTurns.size).toBe(0);
+	});
+});
+
+describe('parseAllSessions()', () => {
+	test('returns one ParsedSession per session file', async () => {
+		const sessions = await parseAllSessions(PROJECT_DIR);
+		expect(sessions).toHaveLength(2);
+	});
+
+	test('each session is fully parsed', async () => {
+		const sessions = await parseAllSessions(PROJECT_DIR);
+		const ids = sessions.map((s) => s.sessionId).sort();
+		expect(ids).toEqual([
+			'00000000-0000-0000-0000-000000000aaa',
+			'00000000-0000-0000-0000-000000000bbb',
+		]);
+	});
+
+	test('excludes agent-*.jsonl (legacy subagent format)', async () => {
+		const sessions = await parseAllSessions(PROJECT_DIR);
+		const ids = sessions.map((s) => s.sessionId);
+		expect(ids.some((id) => id?.startsWith('agent-'))).toBe(false);
+	});
+
+	test('returns empty array for nonexistent directory', async () => {
+		const sessions = await parseAllSessions(join(PROJECT_DIR, 'does-not-exist'));
+		expect(sessions).toEqual([]);
 	});
 });
