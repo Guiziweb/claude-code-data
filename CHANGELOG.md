@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 This file is generated automatically on tagged releases from Conventional Commits.
 Until the first tagged release, only the `Unreleased` section is maintained.
 
+## [1.1.3](https://github.com/Guiziweb/claude-code-data/compare/v1.1.2...v1.1.3) (2026-05-07)
+
+
+### Bug Fixes
+
+* match GitHub org case in package.json URLs ([#57](https://github.com/Guiziweb/claude-code-data/issues/57)) ([d1310bd](https://github.com/Guiziweb/claude-code-data/commit/d1310bd43d64bf7e02b1d3acb6a77dfa6261de1d))
+
 ## [1.1.2](https://github.com/Guiziweb/claude-code-data/compare/v1.1.1...v1.1.2) (2026-05-07)
 
 
