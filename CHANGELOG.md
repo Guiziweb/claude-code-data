@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 This file is generated automatically on tagged releases from Conventional Commits.
 Until the first tagged release, only the `Unreleased` section is maintained.
 
+## [2.0.1](https://github.com/Guiziweb/claude-code-data/compare/v2.0.0...v2.0.1) (2026-05-13)
+
+
+### Bug Fixes
+
+* declare engines.node&gt;=20 (drop stale engines.bun) ([#63](https://github.com/Guiziweb/claude-code-data/issues/63)) ([f53b430](https://github.com/Guiziweb/claude-code-data/commit/f53b43072dfc97eaadcb9397798f18f27fce8e96))
+
 ## [2.0.0](https://github.com/Guiziweb/claude-code-data/compare/v1.1.4...v2.0.0) (2026-05-07)
 
 

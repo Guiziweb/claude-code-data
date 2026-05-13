@@ -1,6 +1,6 @@
 {
 	"name": "claude-code-data",
-	"version": "2.0.0",
+	"version": "2.0.1",
 	"description": "Parser for Claude Code's local session data (~/.claude/).",
 	"type": "module",
 	"license": "MIT",
