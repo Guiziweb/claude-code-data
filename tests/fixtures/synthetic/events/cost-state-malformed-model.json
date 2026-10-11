@@ -1,0 +1,25 @@
+{
+	"type": "cost-state",
+	"sessionId": "00000000-0000-0000-0000-000000000aaa",
+	"startTime": 1790923406276,
+	"totalCostUSD": 0.1195,
+	"totalAPIDuration": 1000,
+	"totalLinesAdded": 0,
+	"totalLinesRemoved": 0,
+	"totalToolDuration": 203,
+	"totalDuration": 5000,
+	"modelUsage": {
+		"claude-haiku-4-5-20251001": {
+			"inputTokens": 1,
+			"outputTokens": 1,
+			"costUSD": 0.0019
+		},
+		"claude-opus-5-5[1m]": {
+			"inputTokens": 1,
+			"outputTokens": 1,
+			"costUSD": 0.1176
+		},
+		"broken-model": null
+	},
+	"hasUnknownModelCost": false
+}

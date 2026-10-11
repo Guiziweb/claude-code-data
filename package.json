@@ -45,6 +45,7 @@
 		"lint": "biome lint .",
 		"format": "biome format --write .",
 		"check": "biome check .",
+		"audit": "bun scripts/audit-format.ts",
 		"ci": "bun run check && bun run typecheck && bun test --coverage && bunx typedoc --entryPoints src/index.ts --out docs --treatWarningsAsErrors"
 	},
 	"devDependencies": {

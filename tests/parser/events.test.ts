@@ -5,9 +5,11 @@ import type {
 	AgentNameEntry,
 	AiTitleEntry,
 	AssistantEntry,
+	CostStateEntry,
 	CustomTitleEntry,
 	LastPromptEntry,
 	PrLinkEntry,
+	RelocatedEntry,
 	SessionEntry,
 	UserEntry,
 	WorktreeStateEntry,
@@ -87,6 +89,37 @@ describe('safeParseEntry() — individual event types', () => {
 		expect(result).not.toBeNull();
 		expect(result.worktreeSession).toBeNull();
 	});
+
+	test('cost-state', () => {
+		const result = safeParseEntry(loadJson('cost-state.json')) as CostStateEntry;
+		expect(result).not.toBeNull();
+		expect(result.startTime).toBe(1790923406276);
+		expect(result.totalCostUSD).toBe(0.1195);
+		expect(result.modelUsage['claude-opus-5-5[1m]']?.costUSD).toBe(0.1176);
+	});
+
+	test('cost-state with one malformed model — other models kept', () => {
+		const result = safeParseEntry(loadJson('cost-state-malformed-model.json')) as CostStateEntry;
+		expect(result).not.toBeNull();
+		expect(result.modelUsage['claude-opus-5-5[1m]']?.costUSD).toBe(0.1176);
+		expect(result.modelUsage['broken-model']?.costUSD).toBeUndefined();
+	});
+
+	test('relocated', () => {
+		const result = safeParseEntry(loadJson('relocated.json')) as RelocatedEntry;
+		expect(result).not.toBeNull();
+		expect(result.relocatedCwd).toBe('/Users/test/project/.claude/worktrees/probe');
+	});
+
+	test('assistant with unexpected analytics field types — entry kept, fields dropped', () => {
+		const result = safeParseEntry(
+			loadJson('assistant-unexpected-field-types.json')
+		) as AssistantEntry;
+		expect(result).not.toBeNull();
+		expect(result.effort).toBe('high');
+		expect(result.attributionSkill).toBeUndefined();
+		expect(result.apiErrorStatus).toBeUndefined();
+	});
 });
 
 describe('safeParseEntry() — union', () => {
@@ -109,6 +142,8 @@ describe('safeParseEntry() — union', () => {
 			'agent-setting.json',
 			'attribution-snapshot.json',
 			'speculation-accept.json',
+			'cost-state.json',
+			'relocated.json',
 		];
 		for (const file of files) {
 			const result: SessionEntry | null = safeParseEntry(loadJson(file));

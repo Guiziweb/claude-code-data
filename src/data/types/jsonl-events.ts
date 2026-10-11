@@ -37,6 +37,17 @@ export type UserEntry = {
 	isCompactSummary?: boolean;
 	/** Used to deduplicate assistant entries replayed after `/resume`. */
 	requestId?: string;
+	/**
+	 * Why a tool call was refused, on the `tool_result` entry that reports the refusal.
+	 * Observed values: `'user-rejected'`, `'automode-blocked'`, `'permission-rule'`,
+	 * `'automode-unavailable'`, `'interrupted'`. Not exhaustive.
+	 */
+	toolDenialKind?: string;
+	/**
+	 * Structured output of the tool call answered by this entry. Its shape depends on the tool
+	 * (e.g. `stdout`/`stderr` for Bash, `runId`/`workflowName` for Workflow) — narrow before use.
+	 */
+	toolUseResult?: unknown;
 };
 
 /** An assistant turn in the session transcript. */
@@ -65,6 +76,27 @@ export type AssistantEntry = {
 	isMeta?: boolean;
 	isCompactSummary?: boolean;
 	requestId?: string;
+	/** Effort level of the API call. Observed values: `'medium'`, `'high'`, `'xhigh'`. */
+	effort?: string;
+	/** Skill whose execution triggered this API call. */
+	attributionSkill?: string;
+	/** MCP server whose tool call (or tool result) triggered this API call. */
+	attributionMcpServer?: string;
+	/** MCP tool name paired with {@link AssistantEntry.attributionMcpServer}. */
+	attributionMcpTool?: string;
+	/** Plugin that provided the skill or tool behind this API call. */
+	attributionPlugin?: string;
+	/** Subagent type behind this API call. Only present in subagent transcripts. */
+	attributionAgent?: string;
+	/**
+	 * `true` when CC wrote this entry to report an API failure instead of a model response.
+	 * The message model is `'<synthetic>'` and its text explains the error.
+	 */
+	isApiErrorMessage?: boolean;
+	/** Error category on API error entries. Observed values: `'rate_limit'`, `'authentication_failed'`, `'server_error'`. */
+	error?: string;
+	/** HTTP status of the failed API call (e.g. `429`). */
+	apiErrorStatus?: number;
 };
 
 /** User-defined session title written by CC when `/title` is used. */
@@ -194,6 +226,41 @@ export type WorktreeStateEntry = {
 		tmuxSessionName?: string;
 		hookBased?: boolean;
 	} | null;
+};
+
+/**
+ * Cost counters of one CC process run, written when the process exits.
+ *
+ * Counters are cumulative within a run and reset when the session is resumed in a new
+ * process — `startTime` identifies the run. A session with several runs carries one
+ * entry per run (sometimes repeated with identical values).
+ * Not emitted by every entrypoint: SDK sessions often have none.
+ */
+export type CostStateEntry = {
+	type: 'cost-state';
+	sessionId: string;
+	/** Run start, in epoch milliseconds. */
+	startTime: number;
+	/** Cost of the run in USD, as computed by CC (includes background calls absent from the transcript). */
+	totalCostUSD: number;
+	/** `0` when absent or invalid — only `startTime` and `totalCostUSD` are required. */
+	totalLinesAdded: number;
+	/** `0` when absent or invalid. */
+	totalLinesRemoved: number;
+	/** Time spent executing tools, in milliseconds. `0` when absent or invalid. */
+	totalToolDuration: number;
+	/** Per-model breakdown. `{}` when absent or invalid. Keys are CC model ids, possibly suffixed (e.g. `claude-opus-5-5[1m]`). */
+	modelUsage: Record<string, { costUSD?: number; [key: string]: unknown }>;
+	/** `true` when CC had no price for at least one model — `totalCostUSD` is then underestimated. */
+	hasUnknownModelCost?: boolean;
+	[key: string]: unknown;
+};
+
+/** Written when CC moves the session to another working directory (e.g. into a worktree). */
+export type RelocatedEntry = {
+	type: 'relocated';
+	sessionId: string;
+	relocatedCwd: string;
 };
 
 /**
@@ -355,6 +422,8 @@ export type SessionEntry =
 	| SummaryEntry
 	| TaskSummaryEntry
 	| WorktreeStateEntry
+	| CostStateEntry
+	| RelocatedEntry
 	| SystemEntry
 	| AttachmentEntry
 	| FileHistorySnapshotEntry
@@ -395,14 +464,32 @@ const TranscriptMessageBaseSchema = {
 	requestId: v.optional(v.string()),
 };
 
+// Analytics-only fields: a shape change from CC must not drop the whole message,
+// so an invalid value falls back to `undefined` instead of failing the entry.
+const lenientString = v.fallback(v.optional(v.string()), undefined);
+const lenientNumber = v.fallback(v.optional(v.number()), undefined);
+const lenientBoolean = v.fallback(v.optional(v.boolean()), undefined);
+const lenientCounter = v.fallback(v.number(), 0);
+
 const TranscriptMessageUserSchema = v.looseObject({
 	type: v.literal('user'),
 	...TranscriptMessageBaseSchema,
+	toolDenialKind: lenientString,
+	toolUseResult: v.optional(v.unknown()),
 });
 
 const TranscriptMessageAssistantSchema = v.looseObject({
 	type: v.literal('assistant'),
 	...TranscriptMessageBaseSchema,
+	effort: lenientString,
+	attributionSkill: lenientString,
+	attributionMcpServer: lenientString,
+	attributionMcpTool: lenientString,
+	attributionPlugin: lenientString,
+	attributionAgent: lenientString,
+	isApiErrorMessage: lenientBoolean,
+	error: lenientString,
+	apiErrorStatus: lenientNumber,
 });
 
 const CustomTitleMessageSchema = v.looseObject({
@@ -500,6 +587,29 @@ const WorktreeStateEntrySchema = v.looseObject({
 	worktreeSession: v.nullable(PersistedWorktreeSessionSchema),
 });
 
+const CostStateEntrySchema = v.looseObject({
+	type: v.literal('cost-state'),
+	sessionId: Uuid,
+	startTime: v.number(),
+	totalCostUSD: v.number(),
+	// Secondary counters: a renamed or missing one must not drop the whole cost.
+	totalLinesAdded: lenientCounter,
+	totalLinesRemoved: lenientCounter,
+	totalToolDuration: lenientCounter,
+	// Per-entry fallback: one malformed model must not drop the breakdown of the others.
+	modelUsage: v.fallback(
+		v.record(v.string(), v.fallback(v.looseObject({ costUSD: lenientNumber }), {})),
+		{}
+	),
+	hasUnknownModelCost: lenientBoolean,
+});
+
+const RelocatedEntrySchema = v.looseObject({
+	type: v.literal('relocated'),
+	sessionId: Uuid,
+	relocatedCwd: v.string(),
+});
+
 // Complex / large-payload events — validate type discriminant only.
 const SystemEntrySchema = v.looseObject({ type: v.literal('system') });
 const AttachmentEntrySchema = v.looseObject({ type: v.literal('attachment') });
@@ -531,6 +641,8 @@ const SessionEntrySchema = v.variant('type', [
 	SummaryMessageSchema,
 	TaskSummaryMessageSchema,
 	WorktreeStateEntrySchema,
+	CostStateEntrySchema,
+	RelocatedEntrySchema,
 	SystemEntrySchema,
 	AttachmentEntrySchema,
 	FileHistorySnapshotEntrySchema,
@@ -541,6 +653,11 @@ const SessionEntrySchema = v.variant('type', [
 	QueueOperationEntrySchema,
 	SpeculationAcceptEntrySchema,
 ]);
+
+/** Every `type` discriminant modelled by {@link SessionEntry}. Internal — used by the format audit. */
+export const KNOWN_ENTRY_TYPES: ReadonlySet<string> = new Set(
+	SessionEntrySchema.options.map((schema) => schema.entries.type.literal)
+);
 
 /** Parses an unknown value as a {@link SessionEntry}. Returns `null` for unrecognised shapes. */
 export function safeParseEntry(value: unknown): SessionEntry | null {

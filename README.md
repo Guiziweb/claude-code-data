@@ -35,6 +35,22 @@ for (const id of await readSessionIds(dir)) {
 
 `readSession` streams the JSONL once and returns aggregate fields only (tokens, branch, first prompt, …). Memory stays constant regardless of session size.
 
+### Cost and attribution — where the tokens went
+
+```ts
+const s = await readSession(dir, id);
+
+s.cost?.usd;               // 4.27 — computed by Claude Code itself, summed across resumes
+s.cost?.linesAdded;        // 312
+s.tokensByMcpServer;       // { playwright: { input, output, cacheRead, cacheCreation } }
+s.tokensBySkill;           // { 'code-review': { … } }
+s.toolDenials;             // { 'user-rejected': 3, 'automode-blocked': 1 }
+s.apiErrors;               // { rate_limit: 1 }
+s.compactions;             // [{ ts, trigger: 'auto', preTokens: 968764, postTokens: 9732 }]
+```
+
+`cost` is `undefined` when Claude Code did not write it (common for SDK sessions). It covers the whole process, subagents included, while `tokens` and the attribution maps cover the main transcript only — see [Subagents](#subagents--task-tool-delegations).
+
 ### Transcripts — turns streamed one at a time
 
 ```ts
@@ -62,6 +78,29 @@ for await (const { agentId, turn } of readSubagentTurns(dir, sessionId)) {
 
 `readSubagentTurns` walks `<sessionId>/subagents/` (including nested layouts) and yields each subagent turn tagged with its `agentId`. The caller groups, filters, or processes incrementally.
 
+`readSession` only reads the main transcript, so its `tokens` exclude subagents. For aggregates, `readSubagents` yields one `ParsedSubagent` per subagent — tokens, tools, models — plus its `agentType` from `agent-<id>.meta.json`:
+
+```ts
+import { readSession, readSubagents, sumTokenBuckets } from 'claude-code-data';
+
+let total = (await readSession(dir, sessionId)).tokens;
+for await (const sub of readSubagents(dir, sessionId)) {
+  total = sumTokenBuckets(total, sub.tokens);
+  console.log(sub.agentType, sub.tokens.output); // 'Explore' 15797
+}
+```
+
+Subagents launched by a workflow carry its `workflowRunId` and their outcome from the run journal (`workflowStatus`: `'done'`, `'failed'` or `'started'`). The run itself — name, summary, launches — is listed in `ParsedSession.workflowRuns`:
+
+```ts
+const { workflowRuns } = await readSession(dir, sessionId);
+const names = new Map(workflowRuns.map((run) => [run.runId, run.name]));
+
+for await (const sub of readSubagents(dir, sessionId)) {
+  if (sub.workflowRunId) console.log(names.get(sub.workflowRunId), sub.workflowStatus); // 'regression-admin' 'failed'
+}
+```
+
 ### Composition
 
 The walking strategy is up to you. Sequential, `Promise.all`, `p-limit` — whatever fits your workload:
@@ -77,6 +116,8 @@ Claude Code stores conversations as JSONL files. Reading them correctly has many
 
 This library handles all of that, so you can build analytics dashboards, session browsers, or scripts without reimplementing the parser.
 
+The format is not documented by Anthropic and changes between releases. `bun run audit` checks your local sessions for drift (new entry types, or known ones the parser no longer accepts).
+
 ## Data model
 
 ```
@@ -84,6 +125,7 @@ This library handles all of that, so you can build analytics dashboards, session
   └── <project-slug>/                       ← a project = a working directory
       └── <session-id>.jsonl                ← a session = one conversation
       └── <session-id>/subagents/agent-*.jsonl  ← subagents (CC ≥ 2.1.2)
+      └── <session-id>/subagents/workflows/<run-id>/  ← workflow agents + journal.jsonl
 ```
 
 ## API
@@ -93,9 +135,11 @@ readSessionIds(projectDir)               // string[]                            
 readSession(projectDir, sessionId)       // ParsedSession                             — aggregate metadata
 readSessionTurns(projectDir, sessionId)  // AsyncGenerator<MessageEntry>              — streamed main turns
 readSubagentTurns(projectDir, sessionId) // AsyncGenerator<{ agentId, turn }>         — streamed subagent turns
+readSubagents(projectDir, sessionId)     // AsyncGenerator<ParsedSubagent>            — one aggregate per subagent
+sumTokenBuckets(...buckets)              // TokenBuckets                              — adds token counts
 ```
 
-Four primitives, each does one thing. The library never decides for you whether to parse all sessions in parallel, sequentially, or with a concurrency limit — that orchestration belongs to the caller. See [`ParsedSession`](https://guiziweb.github.io/claude-code-data/types/ParsedSession.html) and [`MessageEntry`](https://guiziweb.github.io/claude-code-data/types/MessageEntry.html) for all available fields.
+Each primitive does one thing. The library never decides for you whether to parse all sessions in parallel, sequentially, or with a concurrency limit — that orchestration belongs to the caller. See [`ParsedSession`](https://guiziweb.github.io/claude-code-data/types/ParsedSession.html) and [`MessageEntry`](https://guiziweb.github.io/claude-code-data/types/MessageEntry.html) for all available fields.
 
 ## License
 

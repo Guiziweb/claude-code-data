@@ -1,0 +1,7 @@
+{"type":"started","key":"v2:a","agentId":"nested001"}
+{"type":"started","key":"v2:b","agentId":"nested002"}
+{"type":"started","key":"v2:c","agentId":"nested003"}
+{"type":"result","key":"v2:a","agentId":"nested001","result":{"status":"done"}}
+{"type":"failed","key":"v2:b","agentId":"nested002"}
+not json
+{"type": "unknown", "agentId": "nested001"}

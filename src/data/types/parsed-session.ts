@@ -35,6 +35,49 @@ export type ContextTurn = {
 	cacheCreation: number;
 };
 
+/**
+ * Session cost as computed by Claude Code itself, from `cost-state` entries.
+ * Summed across process runs — a resumed session restarts CC's counters at zero.
+ */
+export type SessionCost = {
+	/** Total cost in USD. Includes background calls (titles, summaries) absent from the transcript. */
+	usd: number;
+	/** Cost in USD per CC model id (e.g. `claude-opus-5-5[1m]`). */
+	usdByModel: Record<string, number>;
+	/** Lines of code added by Claude. */
+	linesAdded: number;
+	/** Lines of code removed by Claude. */
+	linesRemoved: number;
+	/** Time spent executing tools, in milliseconds. */
+	toolDurationMs: number;
+	/** `true` when CC had no price for at least one model — `usd` is then underestimated. */
+	hasUnknownModelCost: boolean;
+};
+
+/** One context compaction (`/compact` or automatic). */
+export type Compaction = {
+	/** ISO timestamp of the compaction. */
+	ts: string;
+	/** `'auto'` when CC compacted on its own, `'manual'` for `/compact`. */
+	trigger: string | undefined;
+	/** Context size before compaction, in tokens. */
+	preTokens: number | undefined;
+	/** Context size after compaction, in tokens. */
+	postTokens: number | undefined;
+};
+
+/** A workflow run launched from the session with the `Workflow` tool. */
+export type WorkflowRun = {
+	/** Run id — also the directory of its agents: `subagents/workflows/<runId>/`. */
+	runId: string;
+	/** Workflow name (e.g. `'regression-admin'`). */
+	name: string | undefined;
+	/** Description of the run given at its first launch. */
+	summary: string | undefined;
+	/** ISO timestamp of each launch. More than one when the run was resumed. */
+	launches: string[];
+};
+
 /** Aggregated data extracted from a Claude Code session. */
 export type ParsedSession = {
 	/** Session UUID. `undefined` if the file is empty or contains no entry with a `sessionId` field. */
@@ -84,6 +127,15 @@ export type ParsedSession = {
 	/** Git branch at session end (last-wins, mirrors Claude Code convention). */
 	gitBranch: string | undefined;
 	/**
+	 * Working directory of the last message, or of the last `relocated` entry if it comes later.
+	 * Differs from the project directory when the session moved into a worktree.
+	 */
+	cwd: string | undefined;
+	/** Claude Code version that wrote the last message (e.g. `'2.1.296'`). */
+	claudeCodeVersion: string | undefined;
+	/** How Claude Code was launched for the last message. Observed values: `'cli'`, `'sdk-ts'`. */
+	entrypoint: string | undefined;
+	/**
 	 * Git branch of the worktree when the session ran inside `claude --worktree`.
 	 * `undefined` when no worktree event was seen, or after a worktree-exit event
 	 * (mirrors `worktreePath` semantics: both reset to `undefined` / `null` on exit).
@@ -130,8 +182,11 @@ export type ParsedSession = {
 	apiDurationMs: number;
 
 	/**
-	 * Cumulative token usage for the session.
+	 * Cumulative token usage of the main transcript.
 	 * Deduplicated on `messageId+requestId` — `/resume` replays are counted once.
+	 *
+	 * Excludes subagents, which can be a large share of a session: add the `tokens`
+	 * of {@link readSubagents} for the full picture.
 	 */
 	tokens: TokenBuckets;
 	/**
@@ -168,8 +223,9 @@ export type ParsedSession = {
 	 * replays of previous assistant entries are counted once) and excludes `<synthetic>`
 	 * sentinel messages (compact summaries injected internally by CC).
 	 *
-	 * Like CC's own metric, **includes** subagent assistant turns — there is no `isSidechain`
-	 * filter on the assistant side, mirroring the asymmetry with {@link ParsedSession.userMessageCount}.
+	 * Main transcript only: since CC 2.1.2, subagent turns live in separate files —
+	 * see {@link readSubagents}. Sessions written by older versions mixed them into the
+	 * main file, and those inline subagent turns are counted.
 	 */
 	assistantMessageCount: number;
 
@@ -182,9 +238,52 @@ export type ParsedSession = {
 	/**
 	 * Skill invocation counts keyed by skill name.
 	 * Skills are Claude Code slash-command extensions invoked via the `Skill` tool
-	 * (e.g. `ultrareview`, `voice`). Keyed by `input.skill` from the `tool_use` block.
+	 * (e.g. `ultrareview`, `voice`). Keyed by `input.skill` from the `tool_use` block —
+	 * the name as typed, which may differ from the keys of {@link ParsedSession.tokensBySkill}.
 	 */
 	skillUsage: Record<string, number>;
+
+	/**
+	 * Cost reported by Claude Code. `undefined` when the session has no `cost-state`
+	 * entry — common for SDK sessions and for sessions written by older CC versions.
+	 *
+	 * Covers the whole process: subagents and background calls included. The token
+	 * fields of this type only cover the main transcript, so they do not add up to it.
+	 */
+	cost: SessionCost | undefined;
+	/**
+	 * Token usage per skill, from the `attributionSkill` field of each assistant turn —
+	 * the API calls made while a skill was running. Deduplicated like {@link ParsedSession.tokens}.
+	 * Keys come from `attributionSkill` and may differ from the keys of {@link ParsedSession.skillUsage}.
+	 */
+	tokensBySkill: Record<string, TokenBuckets>;
+	/**
+	 * Token usage per MCP server, from the `attributionMcpServer` field of each assistant turn —
+	 * the API calls that issued or consumed an MCP tool call. Deduplicated like {@link ParsedSession.tokens}.
+	 */
+	tokensByMcpServer: Record<string, TokenBuckets>;
+	/** Unique assistant API calls per effort level (e.g. `{ high: 12, medium: 3 }`). */
+	effortUsage: Record<string, number>;
+	/** Context compactions, in chronological order. */
+	compactions: Compaction[];
+	/**
+	 * Failed API calls keyed by error category (e.g. `rate_limit`, `server_error`).
+	 * Counts the error entries CC writes in place of a response.
+	 */
+	apiErrors: Record<string, number>;
+	/** Number of automatic retries after a transient API error (network, overload). */
+	apiRetryCount: number;
+	/**
+	 * Refused tool calls, keyed by reason
+	 * (e.g. `user-rejected`, `automode-blocked`, `permission-rule`).
+	 */
+	toolDenials: Record<string, number>;
+	/**
+	 * Workflow runs launched from this transcript, in launch order.
+	 * Their agents are yielded by {@link readSubagents}, tagged with the same `workflowRunId`.
+	 */
+	workflowRuns: WorkflowRun[];
+
 	/**
 	 * Human user message count per local hour of day [0..23].
 	 * Mirrors `insights.ts` in Claude Code — tracks when the user actively typed,
@@ -205,4 +304,56 @@ export type ParsedSession = {
 	 * never summed across snapshots (which would cause quadratic count inflation).
 	 */
 	claudeCharsByFile: Record<string, number> | undefined;
+};
+
+/**
+ * Aggregated data of one subagent transcript (`<sessionId>/subagents/…/agent-<id>.jsonl`).
+ *
+ * Keeps the {@link ParsedSession} fields that make sense for a subagent, plus the
+ * metadata CC writes next to the transcript in `agent-<id>.meta.json`.
+ */
+export type ParsedSubagent = Pick<
+	ParsedSession,
+	| 'tokens'
+	| 'tokensByModel'
+	| 'tokensBySkill'
+	| 'tokensByMcpServer'
+	| 'contextByTurn'
+	| 'lastContextTokens'
+	| 'lastModel'
+	| 'primaryModel'
+	| 'assistantMessageCount'
+	| 'toolUsage'
+	| 'skillUsage'
+	| 'effortUsage'
+	| 'compactions'
+	| 'apiErrors'
+	| 'toolDenials'
+	| 'firstTimestamp'
+	| 'lastTimestamp'
+	| 'durationMs'
+> & {
+	/** Subagent id, from the file name `agent-<agentId>.jsonl`. */
+	agentId: string;
+	/** Subagent type (e.g. `'general-purpose'`, `'Explore'`, a custom agent name). */
+	agentType: string | undefined;
+	/** Nesting level: `1` when spawned by the main session, `2` when spawned by a subagent, … */
+	spawnDepth: number | undefined;
+	/** Id of the subagent that spawned this one, for nested subagents. */
+	parentAgentId: string | undefined;
+	/** Id of the `tool_use` block that spawned this subagent in the parent transcript. */
+	toolUseId: string | undefined;
+	/** Short task description given when the subagent was spawned. */
+	description: string | undefined;
+	/**
+	 * Run id when the subagent belongs to a workflow (`subagents/workflows/<runId>/`),
+	 * matching {@link WorkflowRun.runId}. `undefined` for subagents spawned directly.
+	 */
+	workflowRunId: string | undefined;
+	/**
+	 * Outcome recorded in the run's `journal.jsonl`: `'done'` when the agent returned a result,
+	 * `'failed'` when it failed, `'started'` when it never finished (interrupted or still running).
+	 * `undefined` outside workflows or when the journal has no entry for this agent.
+	 */
+	workflowStatus: 'started' | 'done' | 'failed' | undefined;
 };

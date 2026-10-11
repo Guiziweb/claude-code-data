@@ -317,4 +317,108 @@ describe('aggregateSession()', () => {
 			expect(s.lastContextTokens).toBe(200);
 		});
 	});
+
+	describe('insights (session-insights.jsonl)', () => {
+		test('cwd — follows relocated events', async () => {
+			const s = await parse('session-insights.jsonl');
+			expect(s.cwd).toBe('/project/.claude/worktrees/final');
+		});
+
+		test('claudeCodeVersion and entrypoint — last-wins', async () => {
+			const s = await parse('session-insights.jsonl');
+			expect(s.claudeCodeVersion).toBe('2.1.296');
+			expect(s.entrypoint).toBe('sdk-ts');
+		});
+
+		test('cost — last entry per run, summed across runs', async () => {
+			const s = await parse('session-insights.jsonl');
+			expect(s.cost?.usd).toBeCloseTo(2.5);
+			// Second run has no totalLinesAdded / totalToolDuration — counted as 0.
+			expect(s.cost?.linesAdded).toBe(12);
+			expect(s.cost?.linesRemoved).toBe(3);
+			expect(s.cost?.toolDurationMs).toBe(400);
+			expect(s.cost?.usdByModel['claude-opus-5-5[1m]']).toBeCloseTo(2.4);
+			expect(s.cost?.usdByModel['claude-haiku-4-5']).toBeCloseTo(0.1);
+			expect(s.cost?.hasUnknownModelCost).toBe(true);
+		});
+
+		test('tokensBySkill / tokensByMcpServer — deduplicated', async () => {
+			const s = await parse('session-insights.jsonl');
+			expect(s.tokensBySkill['code-review']).toEqual({
+				input: 150,
+				output: 15,
+				cacheRead: 0,
+				cacheCreation: 0,
+			});
+			expect(s.tokensByMcpServer.playwright?.input).toBe(200);
+		});
+
+		test('effortUsage — unique assistant calls per effort', async () => {
+			const s = await parse('session-insights.jsonl');
+			expect(s.effortUsage).toEqual({ medium: 1, high: 2 });
+		});
+
+		test('toolDenials — keyed by reason, inline subagent turns included', async () => {
+			const s = await parse('session-insights.jsonl');
+			expect(s.toolDenials).toEqual({ 'user-rejected': 3, 'automode-blocked': 1 });
+		});
+
+		test('apiErrors and apiRetryCount — only request_retry entries are retries', async () => {
+			const s = await parse('session-insights.jsonl');
+			expect(s.apiErrors).toEqual({ rate_limit: 1 });
+			expect(s.apiRetryCount).toBe(2);
+		});
+
+		test('compactions — chronological, missing metadata left undefined', async () => {
+			const s = await parse('session-insights.jsonl');
+			expect(s.compactions).toEqual([
+				{ ts: '2026-05-01T10:00:12.000Z', trigger: 'auto', preTokens: 968764, postTokens: 9732 },
+				{
+					ts: '2026-05-01T10:00:13.000Z',
+					trigger: 'manual',
+					preTokens: undefined,
+					postTokens: undefined,
+				},
+			]);
+		});
+
+		test('workflowRuns — one per run id, relaunches appended, non-workflow results ignored', async () => {
+			const s = await parse('session-insights.jsonl');
+			expect(s.workflowRuns).toEqual([
+				{
+					runId: 'wf_run-1',
+					name: 'regression-admin',
+					summary: 'regression-admin run',
+					launches: ['2026-05-01T10:00:13.600Z', '2026-05-01T10:00:13.800Z'],
+				},
+				{
+					runId: 'wf_run-2',
+					name: 'post-deploy-test',
+					summary: 'post-deploy-test run',
+					launches: ['2026-05-01T10:00:13.700Z'],
+				},
+			]);
+		});
+
+		test('defaults when absent', async () => {
+			const s = await parse('session-minimal.jsonl');
+			expect(s.cost).toBeUndefined();
+			expect(s.tokensBySkill).toEqual({});
+			expect(s.tokensByMcpServer).toEqual({});
+			expect(s.effortUsage).toEqual({});
+			expect(s.compactions).toEqual([]);
+			expect(s.apiErrors).toEqual({});
+			expect(s.apiRetryCount).toBe(0);
+			expect(s.toolDenials).toEqual({});
+			expect(s.workflowRuns).toEqual([]);
+		});
+	});
+
+	test('keys named like Object.prototype members are counted as plain keys', async () => {
+		const s = await parse('session-prototype-keys.jsonl');
+		const usage = { input: 7, output: 1, cacheRead: 0, cacheCreation: 0 };
+		expect(Object.entries(s.tokensBySkill)).toEqual([['constructor', usage]]);
+		expect(Object.entries(s.tokensByMcpServer)).toEqual([['toString', usage]]);
+		expect(Object.entries(s.effortUsage)).toEqual([['hasOwnProperty', 1]]);
+	});
 });

@@ -1,6 +1,15 @@
-import type { SessionEntry } from '../types/jsonl-events';
+import { emptyTokenBuckets } from '../token-buckets';
+import type { CostStateEntry, SessionEntry } from '../types/jsonl-events';
 import { getMessageId, getMessageModel } from '../types/message-helpers';
-import type { ContextTurn, ParsedSession, TokenBuckets } from '../types/parsed-session';
+import type {
+	Compaction,
+	ContextTurn,
+	ParsedSession,
+	SessionCost,
+	TokenBuckets,
+	WorkflowRun,
+} from '../types/parsed-session';
+import { optionalNumber, optionalString } from './narrow';
 
 const SYNTHETIC_MODEL = '<synthetic>';
 
@@ -54,16 +63,79 @@ function extractFirstPrompt(content: unknown): { prompt: string; isCommand: bool
 
 const HOURS_IN_DAY = 24;
 
-function emptyBuckets(): TokenBuckets {
-	return { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 };
-}
-
 function addUsage(bucket: TokenBuckets, usage: Record<string, unknown> | undefined): void {
 	if (!usage) return;
 	bucket.input += (usage.input_tokens as number | undefined) ?? 0;
 	bucket.output += (usage.output_tokens as number | undefined) ?? 0;
 	bucket.cacheRead += (usage.cache_read_input_tokens as number | undefined) ?? 0;
 	bucket.cacheCreation += (usage.cache_creation_input_tokens as number | undefined) ?? 0;
+}
+
+function addToBucket(
+	map: Record<string, TokenBuckets>,
+	key: string | undefined,
+	usage: Record<string, unknown> | undefined
+): void {
+	if (!key) return;
+	if (!Object.hasOwn(map, key)) map[key] = emptyTokenBuckets();
+	addUsage(map[key] as TokenBuckets, usage);
+}
+
+function increment(map: Record<string, number>, key: string): void {
+	map[key] = (Object.hasOwn(map, key) ? (map[key] as number) : 0) + 1;
+}
+
+/**
+ * Sums the last `cost-state` of each process run.
+ * CC restarts its counters when a session is resumed in a new process, so keeping
+ * only the last entry would drop the cost of every earlier run.
+ */
+function sumCostRuns(lastByRun: Map<number, CostStateEntry>): SessionCost | undefined {
+	if (lastByRun.size === 0) return undefined;
+	const cost: SessionCost = {
+		usd: 0,
+		usdByModel: {},
+		linesAdded: 0,
+		linesRemoved: 0,
+		toolDurationMs: 0,
+		hasUnknownModelCost: false,
+	};
+	for (const run of lastByRun.values()) {
+		cost.usd += run.totalCostUSD;
+		cost.linesAdded += run.totalLinesAdded;
+		cost.linesRemoved += run.totalLinesRemoved;
+		cost.toolDurationMs += run.totalToolDuration;
+		if (run.hasUnknownModelCost) cost.hasUnknownModelCost = true;
+		for (const [model, usage] of Object.entries(run.modelUsage)) {
+			cost.usdByModel[model] = (cost.usdByModel[model] ?? 0) + (usage.costUSD ?? 0);
+		}
+	}
+	return cost;
+}
+
+/**
+ * Records a `Workflow` tool launch. CC reuses the run id when a run is resumed,
+ * so each launch is appended to the existing run instead of creating a new one.
+ */
+function recordWorkflowLaunch(
+	runs: Map<string, WorkflowRun>,
+	result: unknown,
+	timestamp: string
+): void {
+	if (typeof result !== 'object' || result === null) return;
+	const r = result as Record<string, unknown>;
+	if (r.taskType !== 'local_workflow' || typeof r.runId !== 'string') return;
+	const run = runs.get(r.runId);
+	if (run) {
+		run.launches.push(timestamp);
+		return;
+	}
+	runs.set(r.runId, {
+		runId: r.runId,
+		name: optionalString(r.workflowName),
+		summary: optionalString(r.summary),
+		launches: [timestamp],
+	});
 }
 
 function isHumanMessage(content: unknown): boolean {
@@ -119,6 +191,9 @@ export async function aggregateSession(
 	const modelCounts: Record<string, number> = {};
 	// gitBranch: last-wins — mirrors CC's extractLastJsonStringField behaviour.
 	let gitBranch: string | undefined;
+	let cwd: string | undefined;
+	let claudeCodeVersion: string | undefined;
+	let entrypoint: string | undefined;
 	let mode: 'coordinator' | 'normal' | undefined;
 	let permissionMode: string | undefined;
 	let tag: string | undefined;
@@ -131,7 +206,7 @@ export async function aggregateSession(
 	let lastTimestamp: string | undefined;
 	let apiDurationMs = 0;
 
-	const tokens = emptyBuckets();
+	const tokens = emptyTokenBuckets();
 	const tokensByModel: Record<string, TokenBuckets> = {};
 	const contextByTurn: ContextTurn[] = [];
 	let lastContextTokens = 0;
@@ -140,6 +215,15 @@ export async function aggregateSession(
 	const toolUsage: Record<string, number> = {};
 	const skillUsage: Record<string, number> = {};
 	const hourOfDay: number[] = new Array(HOURS_IN_DAY).fill(0);
+	const costByRun = new Map<number, CostStateEntry>();
+	const tokensBySkill: Record<string, TokenBuckets> = {};
+	const tokensByMcpServer: Record<string, TokenBuckets> = {};
+	const effortUsage: Record<string, number> = {};
+	const compactions: Compaction[] = [];
+	const apiErrors: Record<string, number> = {};
+	let apiRetryCount = 0;
+	const toolDenials: Record<string, number> = {};
+	const workflowRuns = new Map<string, WorkflowRun>();
 
 	// Dedup assistant entries by messageId+requestId — CC replays them after /resume.
 	const seenAssistant = new Set<string>();
@@ -194,6 +278,13 @@ export async function aggregateSession(
 			case 'task-summary':
 				taskSummary = entry.summary;
 				break;
+			case 'cost-state':
+				// Last-wins within a run: CC may write the same run several times.
+				costByRun.set(entry.startTime, entry);
+				break;
+			case 'relocated':
+				cwd = entry.relocatedCwd;
+				break;
 			case 'attribution-snapshot': {
 				// Last-wins — fileStates never shrinks, so the last snapshot holds cumulative totals.
 				// Mirrors CC commitAttribution.ts: only the last snapshot is used, never summed.
@@ -207,8 +298,13 @@ export async function aggregateSession(
 				if (!firstTimestamp) firstTimestamp = entry.timestamp;
 				lastTimestamp = entry.timestamp;
 				if (entry.gitBranch) gitBranch = entry.gitBranch;
+				cwd = entry.cwd;
+				claudeCodeVersion = entry.version;
+				if (entry.entrypoint) entrypoint = entry.entrypoint;
 				// Mirrors CC sessionStorage.ts: isAgentSidechain = isSidechain && agentId !== undefined
 				const isMain = !(entry.isSidechain && entry.agentId !== undefined);
+				if (entry.toolDenialKind) increment(toolDenials, entry.toolDenialKind);
+				recordWorkflowLaunch(workflowRuns, entry.toolUseResult, entry.timestamp);
 				if (isMain && !entry.isMeta && !entry.isCompactSummary) {
 					if (isHumanMessage(entry.message.content)) {
 						userMessageCount++;
@@ -266,6 +362,11 @@ export async function aggregateSession(
 				if (!firstTimestamp) firstTimestamp = entry.timestamp;
 				lastTimestamp = entry.timestamp;
 				if (entry.gitBranch) gitBranch = entry.gitBranch;
+				cwd = entry.cwd;
+				claudeCodeVersion = entry.version;
+				if (entry.entrypoint) entrypoint = entry.entrypoint;
+
+				if (entry.isApiErrorMessage) increment(apiErrors, entry.error ?? 'unknown');
 
 				if (model && model !== SYNTHETIC_MODEL) {
 					lastModel = model;
@@ -276,9 +377,12 @@ export async function aggregateSession(
 					const modelKey =
 						(usage as { speed?: unknown } | undefined)?.speed === 'fast' ? `${model}-fast` : model;
 
-					if (!tokensByModel[modelKey]) tokensByModel[modelKey] = emptyBuckets();
+					if (!tokensByModel[modelKey]) tokensByModel[modelKey] = emptyTokenBuckets();
 					addUsage(tokens, usage);
 					addUsage(tokensByModel[modelKey], usage);
+					addToBucket(tokensBySkill, entry.attributionSkill, usage);
+					addToBucket(tokensByMcpServer, entry.attributionMcpServer, usage);
+					if (entry.effort) increment(effortUsage, entry.effort);
 
 					const ctxInput = (usage?.input_tokens as number | undefined) ?? 0;
 					const ctxCacheRead = (usage?.cache_read_input_tokens as number | undefined) ?? 0;
@@ -302,6 +406,16 @@ export async function aggregateSession(
 			}
 			case 'system':
 				if (entry.subtype === 'turn_duration') apiDurationMs += entry.durationMs ?? 0;
+				else if (entry.subtype === 'api_error' && entry.source === 'request_retry') apiRetryCount++;
+				else if (entry.subtype === 'compact_boundary' && entry.timestamp) {
+					const meta = (entry.compactMetadata ?? {}) as Record<string, unknown>;
+					compactions.push({
+						ts: entry.timestamp,
+						trigger: optionalString(meta.trigger),
+						preTokens: optionalNumber(meta.preTokens),
+						postTokens: optionalNumber(meta.postTokens),
+					});
+				}
 				break;
 			default:
 				// Internal CC events (attachment, file-history-snapshot,
@@ -332,6 +446,9 @@ export async function aggregateSession(
 		lastModel,
 		primaryModel,
 		gitBranch,
+		cwd,
+		claudeCodeVersion,
+		entrypoint,
 		mode,
 		permissionMode,
 		tag,
@@ -352,6 +469,15 @@ export async function aggregateSession(
 		assistantMessageCount,
 		toolUsage,
 		skillUsage,
+		cost: sumCostRuns(costByRun),
+		tokensBySkill,
+		tokensByMcpServer,
+		effortUsage,
+		compactions,
+		apiErrors,
+		apiRetryCount,
+		toolDenials,
+		workflowRuns: [...workflowRuns.values()],
 		hourOfDay,
 	};
 }

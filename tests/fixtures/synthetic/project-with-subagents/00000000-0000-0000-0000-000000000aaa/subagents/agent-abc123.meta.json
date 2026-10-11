@@ -1,0 +1,7 @@
+{
+	"agentType": "Explore",
+	"spawnDepth": 1,
+	"toolUseId": "toolu_01",
+	"description": "Find the parser",
+	"requestShape": "foreground"
+}
