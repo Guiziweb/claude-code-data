@@ -205,6 +205,8 @@ export async function* readSubagents(
 			compactions: s.compactions,
 			apiErrors: s.apiErrors,
 			toolDenials: s.toolDenials,
+			toolErrors: s.toolErrors,
+			fileEdits: s.fileEdits,
 			firstTimestamp: s.firstTimestamp,
 			lastTimestamp: s.lastTimestamp,
 			durationMs: s.durationMs,

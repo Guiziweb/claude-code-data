@@ -420,5 +420,27 @@ describe('aggregateSession()', () => {
 		expect(Object.entries(s.tokensBySkill)).toEqual([['constructor', usage]]);
 		expect(Object.entries(s.tokensByMcpServer)).toEqual([['toString', usage]]);
 		expect(Object.entries(s.effortUsage)).toEqual([['hasOwnProperty', 1]]);
+		expect(Object.entries(s.toolUsage)).toEqual([['constructor', 1]]);
+		expect(Object.entries(s.toolErrors)).toEqual([['constructor', 1]]);
+		expect(s.fileEdits).toEqual({});
+	});
+
+	describe('tool results (session-tool-results.jsonl)', () => {
+		test('toolErrors — keyed by tool, refusals / Skill / replays / unknown ids excluded', async () => {
+			const s = await parse('session-tool-results.jsonl');
+			expect(s.toolErrors).toEqual({ Bash: 1, Write: 1 });
+			expect(s.toolDenials).toEqual({ 'user-rejected': 1 });
+		});
+
+		test('fileEdits — successful edits per path, failed and refused edits excluded', async () => {
+			const s = await parse('session-tool-results.jsonl');
+			expect(s.fileEdits).toEqual({ '/p/a.ts': 2, '/p/n.ipynb': 1 });
+		});
+
+		test('defaults when absent', async () => {
+			const s = await parse('session-minimal.jsonl');
+			expect(s.toolErrors).toEqual({});
+			expect(s.fileEdits).toEqual({});
+		});
 	});
 });

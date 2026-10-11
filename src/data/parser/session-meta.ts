@@ -138,6 +138,23 @@ function recordWorkflowLaunch(
 	});
 }
 
+// File-editing tools and the input field holding their target path.
+const FILE_EDIT_TOOLS: Record<string, string> = {
+	Edit: 'file_path',
+	MultiEdit: 'file_path',
+	Write: 'file_path',
+	NotebookEdit: 'notebook_path',
+};
+
+/** A tool call seen in an assistant entry, waiting for its `tool_result`. */
+type ToolCall = {
+	name: string;
+	/** Target path for file-editing tools. */
+	filePath: string | undefined;
+	/** Set once its `tool_result` has been counted — guards against replayed results. */
+	resolved: boolean;
+};
+
 function isHumanMessage(content: unknown): boolean {
 	if (typeof content === 'string') return content.trim().length > 0;
 	if (!Array.isArray(content)) return false;
@@ -223,12 +240,15 @@ export async function aggregateSession(
 	const apiErrors: Record<string, number> = {};
 	let apiRetryCount = 0;
 	const toolDenials: Record<string, number> = {};
+	const toolErrors: Record<string, number> = {};
+	const fileEdits: Record<string, number> = {};
 	const workflowRuns = new Map<string, WorkflowRun>();
 
 	// Dedup assistant entries by messageId+requestId — CC replays them after /resume.
 	const seenAssistant = new Set<string>();
-	// Dedup tool_use by id — CC can stream one call across multiple entries.
-	const seenToolUseId = new Set<string>();
+	// Tool calls by tool_use.id — dedups calls CC streams across several entries,
+	// and resolves each tool_result back to its tool name and target file.
+	const toolCalls = new Map<string, ToolCall>();
 
 	for await (const entry of events) {
 		if (!sessionId && 'sessionId' in entry) {
@@ -305,6 +325,20 @@ export async function aggregateSession(
 				const isMain = !(entry.isSidechain && entry.agentId !== undefined);
 				if (entry.toolDenialKind) increment(toolDenials, entry.toolDenialKind);
 				recordWorkflowLaunch(workflowRuns, entry.toolUseResult, entry.timestamp);
+				if (Array.isArray(entry.message.content)) {
+					for (const block of entry.message.content as Array<Record<string, unknown>>) {
+						if (block.type !== 'tool_result' || typeof block.tool_use_id !== 'string') continue;
+						const call = toolCalls.get(block.tool_use_id);
+						if (!call || call.resolved) continue;
+						call.resolved = true;
+						if (block.is_error === true) {
+							// A refusal is reported as an error result — counted in toolDenials instead.
+							if (!entry.toolDenialKind && call.name !== 'Skill') increment(toolErrors, call.name);
+						} else if (call.filePath) {
+							increment(fileEdits, call.filePath);
+						}
+					}
+				}
 				if (isMain && !entry.isMeta && !entry.isCompactSummary) {
 					if (isHumanMessage(entry.message.content)) {
 						userMessageCount++;
@@ -332,18 +366,24 @@ export async function aggregateSession(
 				if (Array.isArray(msg.content)) {
 					for (const block of msg.content as Array<Record<string, unknown>>) {
 						if (block.type !== 'tool_use' || typeof block.name !== 'string') continue;
+						const input = block.input as Record<string, unknown> | undefined;
 						const id = block.id;
 						if (typeof id === 'string') {
-							if (seenToolUseId.has(id)) continue;
-							seenToolUseId.add(id);
+							if (toolCalls.has(id)) continue;
+							const pathField = Object.hasOwn(FILE_EDIT_TOOLS, block.name)
+								? FILE_EDIT_TOOLS[block.name]
+								: undefined;
+							toolCalls.set(id, {
+								name: block.name,
+								filePath: pathField ? optionalString(input?.[pathField]) : undefined,
+								resolved: false,
+							});
 						}
 						if (block.name === 'Skill') {
-							const skill = (block.input as Record<string, unknown> | undefined)?.skill;
-							if (typeof skill === 'string' && skill.trim()) {
-								skillUsage[skill] = (skillUsage[skill] ?? 0) + 1;
-							}
+							const skill = input?.skill;
+							if (typeof skill === 'string' && skill.trim()) increment(skillUsage, skill);
 						} else {
-							toolUsage[block.name] = (toolUsage[block.name] ?? 0) + 1;
+							increment(toolUsage, block.name);
 						}
 					}
 				}
@@ -477,6 +517,8 @@ export async function aggregateSession(
 		apiErrors,
 		apiRetryCount,
 		toolDenials,
+		toolErrors,
+		fileEdits,
 		workflowRuns: [...workflowRuns.values()],
 		hourOfDay,
 	};

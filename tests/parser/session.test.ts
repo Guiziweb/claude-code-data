@@ -119,7 +119,7 @@ describe('readSubagentTurns()', () => {
 		for await (const { agentId } of readSubagentTurns(PROJECT_DIR, SESSION_ID)) {
 			byAgent.set(agentId, (byAgent.get(agentId) ?? 0) + 1);
 		}
-		expect(byAgent.get('abc123')).toBe(3);
+		expect(byAgent.get('abc123')).toBe(4);
 		expect(byAgent.get('nested001')).toBe(1);
 	});
 
@@ -157,6 +157,8 @@ describe('readSubagents()', () => {
 		expect(sub?.assistantMessageCount).toBe(1);
 		expect(sub?.primaryModel).toBe('claude-sonnet-4-6');
 		expect(sub?.toolDenials).toEqual({ 'automode-blocked': 1 });
+		expect(sub?.toolErrors).toEqual({ Bash: 1 });
+		expect(sub?.fileEdits).toEqual({ '/p/sub.ts': 1 });
 	});
 
 	test('reads agent metadata from agent-<id>.meta.json', async () => {

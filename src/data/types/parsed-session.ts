@@ -279,6 +279,20 @@ export type ParsedSession = {
 	 */
 	toolDenials: Record<string, number>;
 	/**
+	 * Failed tool calls keyed by tool name — `tool_result` entries flagged `is_error`.
+	 * Refusals are excluded (see {@link ParsedSession.toolDenials}), as are `Skill` calls,
+	 * so keys match {@link ParsedSession.toolUsage} and `toolErrors[t] / toolUsage[t]` is an error rate.
+	 * Transcripts written before CC recorded `toolDenialKind` count refusals as errors.
+	 */
+	toolErrors: Record<string, number>;
+	/**
+	 * Successful edit calls per file path, from `Edit`, `MultiEdit`, `Write` and `NotebookEdit`.
+	 * One call counts once, even a `MultiEdit` with several changes. Failed or refused calls are
+	 * not counted. Paths are as given to the tool and not normalized — the same file reached
+	 * through two paths (e.g. a worktree) appears under two keys.
+	 */
+	fileEdits: Record<string, number>;
+	/**
 	 * Workflow runs launched from this transcript, in launch order.
 	 * Their agents are yielded by {@link readSubagents}, tagged with the same `workflowRunId`.
 	 */
@@ -329,6 +343,8 @@ export type ParsedSubagent = Pick<
 	| 'compactions'
 	| 'apiErrors'
 	| 'toolDenials'
+	| 'toolErrors'
+	| 'fileEdits'
 	| 'firstTimestamp'
 	| 'lastTimestamp'
 	| 'durationMs'
